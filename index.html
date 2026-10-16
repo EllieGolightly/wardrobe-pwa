@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#E6E3DB">
+<title>我的衣橱 · Wardrobe</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="prefetch" href="sw.js">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23FFD23F'/%3E%3Cpath d='M25 18 Q32 24 39 18 L49 23 L44 32 L39 29 L39 48 L25 48 L25 29 L20 32 L15 23 Z' fill='%23FBFAF6' stroke='%2317150E' stroke-width='2.5' stroke-linejoin='round'/%3E%3C/svg%3E">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="衣橱">
+<link rel="stylesheet" href="https://miaoda.feishu.cn/fonts/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;700&family=Noto+Sans+SC:wght@400;500;700;900&display=swap">
+<style>
+/* ============ 设计 Tokens：Soft Brutalism ============ */
+:root{
+  --bg:#E6E3DB;                 /* 新拟态暖米灰底 */
+  --paper:#FBFAF6;
+  --light:#FFFFFF;
+  --dark:#C2BEB1;
+  --ink:#17150E;                /* 墨黑 */
+  --yellow:#FFD23F;
+  --coral:#FF5E48;
+  --blue:#2B45E8;
+  --mint:#35D693;
+  --pink:#FF5DA2;
+  --violet:#8B5CF6;
+  --sky:#58C0F0;
+  --hard:4px 4px 0 var(--ink);
+  --hard-lg:6px 6px 0 var(--ink);
+  --hard-sm:2px 2px 0 var(--ink);
+  --border:2.5px solid var(--ink);
+  --border-thin:2px solid var(--ink);
+  --soft:9px 9px 18px var(--dark), -9px -9px 18px var(--light);
+  --soft-sm:5px 5px 10px var(--dark), -5px -5px 10px var(--light);
+  --soft-inset:inset 5px 5px 10px var(--dark), inset -5px -5px 10px var(--light);
+  --r-soft:20px;
+  --r-hard:14px;
+  --r-chip:999px;
+  --font-display:'Archivo Black','Noto Sans SC',sans-serif;
+  --font-ui:'Space Grotesk','Noto Sans SC',sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--font-ui);
+  font-size:15px;line-height:1.5;
+  background-image:radial-gradient(rgba(23,21,14,.05) 1px, transparent 1px);
+  background-size:22px 22px;
+}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,select,textarea{font-family:inherit;color:inherit}
+h1,h2,h3,h4{margin:0;font-weight:900}
+::placeholder{color:#9a968a}
+
+/* ============ 布局 ============ */
+.app{max-width:480px;margin:0 auto;min-height:100vh;padding:18px 16px 108px;position:relative}
+.screen{display:none;animation:fade .28s ease}
+.screen.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+.app-header{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin:6px 0 18px}
+.app-header .title{font-family:var(--font-display);font-size:27px;line-height:1.02;letter-spacing:-.5px}
+.app-header .title .zh{font-family:'Noto Sans SC';font-weight:900;display:block}
+.app-header .sub{font-size:12.5px;color:#6b675c;margin-top:6px}
+.app-header .h-action{flex-shrink:0}
+
+/* ============ 新拟态（软） ============ */
+.card{background:var(--bg);border-radius:var(--r-soft);box-shadow:var(--soft);padding:16px}
+.card.tight{padding:13px}
+.field{width:100%;background:var(--bg);border:none;border-radius:13px;box-shadow:var(--soft-inset);padding:13px 14px;font-size:16px;outline:none}
+textarea.field{resize:vertical;min-height:74px}
+select.field{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24'%3E%3Cpath d='M6 9l6 6 6-6' stroke='%2317150E' stroke-width='2.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:38px}
+.field:focus{box-shadow:inset 5px 5px 10px var(--dark), inset -5px -5px 10px var(--light), 0 0 0 2px rgba(43,69,232,.25)}
+.label{display:block;font-size:12.5px;font-weight:700;margin:14px 0 7px;letter-spacing:.3px}
+.label .req{color:var(--coral)}
+.btn-soft{background:var(--bg);border-radius:14px;box-shadow:var(--soft-sm);padding:12px 16px;font-weight:700;font-size:14px;transition:.12s}
+.btn-soft:active{box-shadow:var(--soft-inset)}
+
+/* ============ 粗野主义（硬） ============ */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:var(--border);border-radius:var(--r-hard);
+  box-shadow:var(--hard);background:var(--paper);color:var(--ink);font-weight:700;font-size:14.5px;padding:11px 16px;transition:transform .08s, box-shadow .08s}
+.btn:active{transform:translate(4px,4px);box-shadow:0 0 0 var(--ink)}
+.btn.yellow{background:var(--yellow)} .btn.coral{background:var(--coral);color:#fff}
+.btn.blue{background:var(--blue);color:#fff} .btn.mint{background:var(--mint)}
+.btn.pink{background:var(--pink);color:#fff} .btn.violet{background:var(--violet);color:#fff}
+.btn.block{width:100%;padding:14px;font-size:16px}
+.btn.sm{padding:7px 12px;font-size:13px;border-radius:11px;box-shadow:var(--hard-sm)}
+.btn.sm:active{transform:translate(2px,2px)}
+.btn.ghost{box-shadow:none;background:var(--paper)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn svg{width:17px;height:17px;flex-shrink:0}
+.btn.sm svg{width:14px;height:14px}
+
+.chip{display:inline-flex;align-items:center;gap:5px;border:var(--border-thin);border-radius:var(--r-chip);
+  padding:3px 11px;font-size:12px;font-weight:700;background:var(--paper);color:var(--ink)}
+.chip.on{background:var(--yellow);box-shadow:var(--hard-sm)}
+.chip .x{font-weight:900;line-height:1}
+
+/* 照片卡（粗野边框+硬阴影） */
+.photo{border:var(--border);border-radius:var(--r-hard);box-shadow:var(--hard);overflow:hidden;background:#fff;background-size:cover;background-position:center}
+.photo:active{transform:translate(4px,4px);box-shadow:0 0 0 var(--ink)}
+
+/* 色块 */
+.swatch{width:34px;height:34px;border-radius:50%;border:2.5px solid var(--ink);padding:0;transition:.1s}
+.swatch.on{box-shadow:0 0 0 3px var(--bg),0 0 0 5.5px var(--ink);transform:scale(1.06)}
+.dot{width:12px;height:12px;border-radius:50%;border:2px solid var(--ink);display:inline-block;flex-shrink:0}
+
+/* ============ 底部 Tab ============ */
+.tabbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;
+  background:var(--bg);padding:10px 14px 16px;box-shadow:0 -10px 24px rgba(0,0,0,.10);
+  display:flex;justify-content:space-around;z-index:40;border-radius:24px 24px 0 0}
+.tab{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:700;color:#7b776b;
+  padding:7px 10px;border-radius:14px;min-width:60px;transition:.12s}
+.tab svg{width:23px;height:23px}
+.tab.active{color:var(--ink);background:var(--yellow);border:2px solid var(--ink);box-shadow:var(--hard-sm);padding:5px 8px}
+
+/* FAB */
+.fab{position:fixed;right:calc(50% - 240px + 18px);bottom:96px;width:58px;height:58px;border-radius:50%;
+  background:var(--coral);border:var(--border);box-shadow:var(--hard);display:flex;align-items:center;justify-content:center;z-index:39;transition:.1s}
+.fab:active{transform:translate(4px,4px);box-shadow:0 0 0 var(--ink)}
+.fab svg{width:28px;height:28px}
+@media (max-width:480px){.fab{right:18px}}
+
+/* ============ 弹层 / Toast ============ */
+.overlay{position:fixed;inset:0;background:rgba(23,21,14,.42);display:none;align-items:flex-end;justify-content:center;z-index:60;animation:fade .2s}
+.overlay.show{display:flex}
+.sheet{background:var(--bg);width:100%;max-width:480px;border-radius:24px 24px 0 0;border:var(--border);border-bottom:none;
+  padding:20px 18px 28px;max-height:88vh;overflow-y:auto;animation:up .25s ease}
+@keyframes up{from{transform:translateY(40px)}to{transform:none}}
+.sheet h3{font-family:var(--font-display);font-size:20px;margin-bottom:4px}
+.overlay.center{align-items:center}
+.overlay.center .sheet{border-radius:var(--r-hard);border-bottom:var(--border);max-width:calc(100% - 48px);margin:0 24px}
+
+.toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--yellow);
+  border:2.5px solid var(--ink);border-radius:12px;padding:11px 18px;font-weight:700;font-size:14px;z-index:80;opacity:0;
+  transition:.22s;max-width:calc(100% - 48px);text-align:center;box-shadow:var(--hard)}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ============ 网格/列表 ============ */
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.item-card .photo{height:168px;position:relative}
+.item-card .nm{font-size:13.5px;font-weight:700;margin:8px 2px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item-card .meta{font-size:11.5px;color:#7b776b;margin:2px 2px 0;display:flex;align-items:center;gap:6px}
+.row{display:flex;align-items:center;gap:11px}
+.row .grow{flex:1;min-width:0}
+.divider{height:2.5px;background:var(--ink);border-radius:2px;margin:16px 0}
+
+/* 空状态 */
+.empty{text-align:center;padding:46px 24px}
+.empty .art{width:118px;height:118px;margin:0 auto 18px;border:var(--border);border-radius:22px;background:var(--mint);box-shadow:var(--hard);display:flex;align-items:center;justify-content:center}
+.empty .art svg{width:64px;height:64px}
+.empty h3{font-family:var(--font-display);font-size:19px;margin-bottom:8px}
+.empty p{color:#6b675c;font-size:13.5px;margin:0 auto 18px;max-width:280px}
+
+/* 分段筛选条 */
+.segment{display:flex;gap:8px;overflow-x:auto;padding:2px 0 12px;scrollbar-width:none}
+.segment::-webkit-scrollbar{display:none}
+.segment .chip{flex-shrink:0}
+
+/* ============ 今日 ============ */
+.today-hero{background:var(--blue);color:#fff;border:var(--border);border-radius:var(--r-hard);box-shadow:var(--hard);padding:16px 18px;margin-bottom:16px}
+.today-hero .big{font-family:var(--font-display);font-size:31px;line-height:1}
+.today-hero .d{font-size:13px;opacity:.9;margin-top:6px}
+.today-items{display:flex;flex-wrap:wrap;gap:10px}
+.mini{width:74px;text-align:center}
+.mini .photo{width:74px;height:74px;border-radius:12px}
+.mini .t{font-size:11px;margin-top:5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ============ 详情 ============ */
+.detail-photo{height:300px;border-radius:var(--r-hard);margin-bottom:16px}
+.kv{display:flex;flex-wrap:wrap;gap:8px}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:11px;margin:16px 0}
+.kpi{background:var(--bg);border-radius:var(--r-hard);box-shadow:var(--soft-sm);padding:13px 8px;text-align:center}
+.kpi .n{font-family:var(--font-display);font-size:21px}
+.kpi .l{font-size:11px;color:#7b776b;margin-top:3px}
+.history-item{display:flex;align-items:center;gap:11px;padding:10px 0;border-bottom:2px dashed #d3cfc3}
+.history-item:last-child{border-bottom:none}
+.history-item .photo{width:46px;height:46px;border-radius:10px;border-width:2px;box-shadow:var(--hard-sm)}
+
+/* 选择物品（记录/搭配） */
+.pick-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.pick{position:relative;text-align:center}
+.pick .photo{height:92px;border-radius:12px;opacity:.55;filter:grayscale(.5)}
+.pick.on .photo{opacity:1;filter:none;box-shadow:var(--hard);border-color:var(--ink)}
+.pick.on .photo{box-shadow:0 0 0 3px var(--mint), var(--hard)}
+.pick .t{font-size:11.5px;margin-top:5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pick .check{position:absolute;top:4px;right:4px;width:24px;height:24px;border-radius:50%;background:var(--mint);border:2px solid var(--ink);display:none;align-items:center;justify-content:center}
+.pick.on .check{display:flex}
+
+/* ============ 统计 ============ */
+.stat-big{font-family:var(--font-display);font-size:40px;line-height:1}
+.stat-tabs{display:flex;gap:8px;margin-bottom:14px}
+.stat-tabs .btn{flex:1;padding:9px;font-size:13px}
+.rank-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:2px dashed #d3cfc3}
+.rank-row:last-child{border-bottom:none}
+.rank-row .photo{width:52px;height:52px;border-radius:11px;border-width:2px;box-shadow:var(--hard-sm)}
+.rank-row .idx{font-family:var(--font-display);font-size:17px;width:22px;text-align:center}
+.rank-row .val{font-weight:700;font-size:14px}
+.rank-row .sub{font-size:11.5px;color:#7b776b}
+.idle-group{margin-bottom:18px}
+.idle-group .hd{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.idle-group .hd .tag{font-family:var(--font-display);font-size:13px;padding:4px 10px;border-radius:9px;border:var(--border-thin)}
+.idle-strip{display:flex;gap:11px;overflow-x:auto;padding-bottom:6px;scrollbar-width:none}
+.idle-strip::-webkit-scrollbar{display:none}
+.idle-strip .photo{width:84px;height:84px;flex-shrink:0;border-radius:12px}
+
+/* ============ 日历 ============ */
+.cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.cal-head .m{font-family:var(--font-display);font-size:20px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:7px}
+.cal-dow{text-align:center;font-size:11px;font-weight:700;color:#7b776b;padding-bottom:4px}
+.cal-day{aspect-ratio:1;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-size:14px;font-weight:700;box-shadow:var(--soft-sm);background:var(--bg);position:relative;gap:2px}
+.cal-day.other{opacity:.35}
+.cal-day.today{border:2.5px solid var(--blue);color:var(--blue)}
+.cal-day.marked{background:var(--yellow);border:2px solid var(--ink);box-shadow:var(--hard-sm)}
+.cal-day .mk{display:flex;gap:3px}
+.cal-day .mk i{width:5px;height:5px;border-radius:50%;background:var(--ink)}
+
+/* 设置 */
+.set-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 0;border-bottom:2px dashed #d3cfc3}
+.set-row:last-child{border-bottom:none}
+.set-row .l{font-weight:700;font-size:14.5px}
+.set-row .d{font-size:12px;color:#7b776b;margin-top:2px}
+.cur-select{width:120px}
+.about{text-align:center;font-size:12px;color:#7b776b;margin-top:24px;line-height:1.8}
+.about .logo{font-family:var(--font-display);font-size:15px;color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="app" id="app"><!-- 视图由 JS 渲染 --></div>
+
+<!-- 添加 FAB -->
+<button class="fab" id="fab" style="display:none" onclick="go('/edit')"><svg viewBox="0 0 24 24" fill="none" stroke="#17150E" stroke-width="2.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+
+<!-- 底部导航 -->
+<nav class="tabbar" id="tabbar">
+  <button class="tab" data-route="today">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+    今日</button>
+  <button class="tab" data-route="wardrobe">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.4 7.6a5 5 0 0 0-7.6 1L12 10l-.8-1.4a5 5 0 0 0-7.6-1 5 5 0 0 0 0 7L12 21l8.4-6.4a5 5 0 0 0 0-7z"/></svg>
+    衣橱</button>
+  <button class="tab" data-route="calendar">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/></svg>
+    日历</button>
+  <button class="tab" data-route="stats">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V11M10 20V4M16 20v-7M22 20H2"/></svg>
+    统计</button>
+  <button class="tab" data-route="settings">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    设置</button>
+</nav>
+
+<!-- 弹层 -->
+<div class="overlay" id="overlay"><div class="sheet" id="sheet"></div></div>
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============ JS 占位，后续批量实现 ============ */
+/* ================= 常量 ================= */
+const DEFAULT_CATEGORIES=[
+  {id:'top',name:'上衣'},{id:'bottom',name:'下装'},{id:'dress',name:'连体'},
+  {id:'outer',name:'外套'},{id:'shoes',name:'鞋'},{id:'bag',name:'包'},
+  {id:'hat',name:'帽子'},{id:'accessory',name:'配饰'},{id:'other',name:'其他'}
+];
+const COLORS=[
+  {id:'black',name:'黑色',hex:'#232323'},{id:'white',name:'白色',hex:'#FFFFFF'},
+  {id:'cream',name:'米白',hex:'#EDE6D6'},{id:'gray',name:'灰色',hex:'#9A9A9A'},
+  {id:'navy',name:'藏青',hex:'#1F2A55'},{id:'blue',name:'蓝色',hex:'#2B45E8'},
+  {id:'denim',name:'牛仔',hex:'#5C7BA0'},{id:'green',name:'绿色',hex:'#2E9E5B'},
+  {id:'olive',name:'军绿',hex:'#5E6B3A'},{id:'khaki',name:'卡其',hex:'#B8A678'},
+  {id:'brown',name:'棕色',hex:'#7A4A26'},{id:'camel',name:'驼色',hex:'#C49A6C'},
+  {id:'red',name:'红色',hex:'#D63333'},{id:'pink',name:'粉色',hex:'#F0A0B8'},
+  {id:'orange',name:'橙色',hex:'#F07A2E'},{id:'yellow',name:'黄色',hex:'#F2C230'},
+  {id:'purple',name:'紫色',hex:'#8B5CF6'},{id:'silver',name:'银色',hex:'#C7C9CC'},
+  {id:'gold',name:'金色',hex:'#D8B863'}
+];
+const SEASONS=[
+  {id:'spring-autumn',name:'春秋'},{id:'summer',name:'夏'},{id:'winter',name:'冬'}
+];
+const OCCASIONS=[
+  {id:'commute',name:'通勤'},{id:'casual',name:'休闲'},{id:'formal',name:'正式'},
+  {id:'sport',name:'运动'},{id:'home',name:'居家'},{id:'other',name:'其他'}
+];
+const CURRENCIES=[
+  {code:'CNY',symbol:'¥'},{code:'TWD',symbol:'$'},{code:'USD',symbol:'$'},{code:'EUR',symbol:'€'}
+];
+const cName=(id,list)=>{const x=list.find(v=>v.id===id);return x?x.name:''};
+const colorById=id=>COLORS.find(c=>c.id===id);
+const catById=id=>STATE.categories.find(c=>c.id===id);
+
+/* ================= 工具 ================= */
+const $=(s,r=document)=>r.querySelector(s);
+const uuid=()=>crypto.randomUUID?crypto.randomUUID():('id-'+Date.now()+Math.random().toString(16).slice(2));
+const esc=s=>(s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const pad=n=>String(n).padStart(2,'0');
+const dateKey=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const parseKey=k=>{const[y,m,dd]=k.split('-').map(Number);return new Date(y,m-1,dd)};
+const todayKey=()=>dateKey(new Date());
+const addDays=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x};
+const WD=['日','一','二','三','四','五','六'];
+const wdCN=k=>'周'+WD[parseKey(k).getDay()];
+const fmtDate=k=>{const d=parseKey(k);return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`};
+const daysBetween=(a,b)=>Math.round((parseKey(b)-parseKey(a))/86400000);
+const curSym=code=>{const c=CURRENCIES.find(x=>x.code===code);return c?c.symbol:'$'};
+const fmtMoney=(n,cur)=>{if(n==null||n===''||isNaN(n))return '—';return curSym(cur)+Number(n).toLocaleString()};
+const readAsDataURL=f=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(f)});
+const loadImage=src=>new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=src});
+async function compressImage(file){
+  const img=await loadImage(await readAsDataURL(file));
+  const max=1100;let w=img.width,h=img.height;
+  if(w>max||h>max){if(w>=h){h=Math.round(h*max/w);w=max}else{w=Math.round(w*max/h);h=max}}
+  const cv=document.createElement('canvas');cv.width=w;cv.height=h;
+  cv.getContext('2d').drawImage(img,0,0,w,h);
+  return new Promise(res=>cv.toBlob(b=>res(b),'image/jpeg',0.82));
+}
+const urlCache=new Map();
+function imgUrl(item){
+  if(!item||!item.imageBlob)return '';
+  if(!urlCache.has(item.id))urlCache.set(item.id,URL.createObjectURL(item.imageBlob));
+  return urlCache.get(item.id);
+}
+
+/* ================= IndexedDB ================= */
+let db;
+function openDB(){return new Promise((res,rej)=>{
+  const req=indexedDB.open('wardrobe',1);
+  req.onupgradeneeded=e=>{
+    const d=e.target.result;
+    if(!d.objectStoreNames.contains('items')){
+      const s=d.createObjectStore('items',{keyPath:'id'});
+      s.createIndex('status','status');s.createIndex('categoryId','categoryId');
+    }
+    if(!d.objectStoreNames.contains('logs')){
+      const l=d.createObjectStore('logs',{keyPath:'id'});l.createIndex('date','date',{unique:true});
+    }
+    if(!d.objectStoreNames.contains('categories'))d.createObjectStore('categories',{keyPath:'id'});
+    if(!d.objectStoreNames.contains('settings'))d.createObjectStore('settings',{keyPath:'key'});
+  };
+  req.onsuccess=e=>{db=e.target.result;res(db)};
+  req.onerror=e=>rej(e);
+});}
+const tx=(s,m='readonly')=>db.transaction(s,m).objectStore(s);
+const reqP=r=>new Promise((res,rej)=>{r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
+const dbAll=s=>reqP(tx(s).getAll());
+const dbGet=(s,id)=>reqP(tx(s).get(id));
+const dbPut=(s,v)=>reqP(tx(s,'readwrite').put(v));
+const dbDel=(s,id)=>reqP(tx(s,'readwrite').delete(id));
+const getSetting=async(k,def)=>{const v=await dbGet('settings',k);return v?v.value:def};
+const setSetting=(k,v)=>dbPut('settings',{key:k,value:v});
+async function ensureCategories(){
+  const c=await dbAll('categories');
+  if(c.length===0)for(const x of DEFAULT_CATEGORIES)await dbPut('categories',x);
+}
+const CAT_LABEL_VERSION=2;
+// 把旧版本写入的内置分类名称（如繁体、连身）同步为最新简体，自定义分类不动
+async function syncBuiltinCategories(){
+  const v=await getSetting('catVersion',0);
+  if(Number(v)>=CAT_LABEL_VERSION)return;
+  const cats=await dbAll('categories');
+  for(const def of DEFAULT_CATEGORIES){
+    const c=cats.find(x=>x.id===def.id);
+    if(!c){await dbPut('categories',def)}
+    else if(!c.isCustom&&c.name!==def.name){c.name=def.name;await dbPut('categories',c)}
+  }
+  await setSetting('catVersion',CAT_LABEL_VERSION);
+}
+
+/* ================= 状态 ================= */
+let STATE={items:[],logs:[],categories:[],currency:'CNY'};
+async function loadState(){
+  STATE.items=await dbAll('items');
+  STATE.logs=await dbAll('logs');
+  STATE.categories=await dbAll('categories');
+  STATE.currency=await getSetting('currency','CNY');
+}
+/* ================= 统计计算 ================= */
+function wearCountOf(id){return STATE.logs.reduce((n,l)=>n+(l.itemIds.includes(id)?1:0),0)}
+function lastWornOf(id){let last=null;for(const l of STATE.logs)if(l.itemIds.includes(id)&&(!last||l.date>last))last=l.date;return last}
+function cpwOf(item){
+  if(item.price==null||item.price===''||isNaN(item.price))return null;
+  const n=wearCountOf(item.id);
+  return n===0?Number(item.price):Number(item.price)/n;
+}
+function fmtCpw(item){const v=cpwOf(item);if(v==null)return '—';return curSym(STATE.currency)+(v>=100?Math.round(v).toLocaleString():v.toFixed(1))}
+function idleDays(item,tk=todayKey()){
+  const last=lastWornOf(item.id)||item.purchaseDate;
+  if(last)return daysBetween(last,tk);
+  return daysBetween(dateKey(new Date(item.createdAt)),tk);
+}
+const activeItems=()=>STATE.items.filter(i=>i.status!=='archived');
+
+/* ================= 通用 UI ================= */
+let toastTimer;
+function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),1900)}
+function openSheet(html,center=false){const ov=$('#overlay');$('#sheet').innerHTML=html;ov.classList.toggle('center',center);ov.classList.add('show')}
+function closeSheet(){$('#overlay').classList.remove('show')}
+$('#overlay').addEventListener('click',e=>{if(e.target.id==='overlay')closeSheet()});
+function header(zh,en,action){
+  return `<div class="app-header"><div><div class="title"><span class="zh">${zh}</span></div><div class="sub">${en||''}</div></div><div class="h-action">${action||''}</div></div>`;
+}
+const ICON={
+  plus:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`,
+  chevron:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>`,
+  back:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>`
+};
+
+/* ================= 路由 ================= */
+function go(h){location.hash=h}
+function parseRoute(){const p=location.hash.replace(/^#/,'').split('/').filter(Boolean);return p.length?p:['today']}
+const TAB_OF={today:'today',wardrobe:'wardrobe',item:'wardrobe',edit:'wardrobe',log:'today',calendar:'calendar',stats:'stats',settings:'settings'};
+function setActiveTab(n){document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.route===n))}
+async function render(){
+  const p=parseRoute(),page=p[0];
+  setActiveTab(TAB_OF[page]||'today');
+  const app=$('#app');
+  switch(page){
+    case 'today':viewToday(app);break
+    case 'wardrobe':viewWardrobe(app);break
+    case 'item':viewItem(app,p[1]);break
+    case 'edit':viewEdit(app,p[1]);break
+    case 'log':viewLog(app,p[1]);break
+    case 'calendar':viewCalendar(app);break
+    case 'stats':viewStats(app);break
+    case 'settings':viewSettings(app);break
+    case 'archived':viewArchived(app);break
+    default:viewToday(app)
+  }
+  $('#fab').style.display=(page==='wardrobe')?'flex':'none';
+  window.scrollTo(0,0);
+}
+window.addEventListener('hashchange',render);
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>go('/'+t.dataset.route)));
+/* ================= 视图：今日 ================= */
+function viewToday(app){
+  const tk=todayKey(),d=new Date();
+  const log=STATE.logs.find(l=>l.date===tk);
+  let html=header('今日','TODAY');
+  html+=`<div class="today-hero"><div class="big">${d.getMonth()+1}月${d.getDate()}日</div><div class="d">${wdCN(tk)}${log?' · 已记录穿搭':' · 还没记录'}</div></div>`;
+  if(log){
+    const items=log.itemIds.map(id=>STATE.items.find(i=>i.id===id)).filter(Boolean);
+    html+=`<div class="card"><div class="label" style="margin-top:0">今天穿了 ${items.length} 件</div><div class="today-items">`;
+    html+=items.map(it=>`<div class="mini"><div class="photo" style="background-image:url('${imgUrl(it)}')"></div><div class="t">${esc(it.name||(catById(it.categoryId)||{}).name||'')}</div></div>`).join('');
+    html+=`</div><div style="display:flex;gap:10px;margin-top:16px"><button class="btn blue block" onclick="go('/log/${tk}')">编辑</button><button class="btn ghost block" onclick="confirmClearLog('${tk}')">撤销</button></div></div>`;
+  }else{
+    html+=`<div class="card" style="padding:32px 20px;text-align:center"><h3 style="font-family:var(--font-display);font-size:18px;margin-bottom:8px">今天穿了什么？</h3><p style="color:#6b675c;font-size:13px;margin:0 0 18px">记录一次穿搭，几秒钟，顺便看看每件衣服的单次成本。</p><button class="btn yellow block" onclick="go('/log/${tk}')">记录今日穿搭</button></div>`;
+  }
+  const recent=STATE.logs.filter(l=>l.date<tk).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
+  if(recent.length){
+    html+=`<div class="label" style="margin:22px 4px 8px">最近记录</div><div class="card tight">`;
+    html+=recent.map(l=>`<div class="row" style="padding:9px 0;cursor:pointer" onclick="go('/log/${l.date}')"><div class="grow"><div style="font-weight:700;font-size:14px">${fmtDate(l.date)} <span style="color:#7b776b;font-weight:400">${wdCN(l.date)}</span></div><div style="font-size:12px;color:#7b776b">${l.itemIds.length} 件单品</div></div><div style="color:#7b776b">${ICON.chevron}</div></div>`).join('');
+    html+=`</div>`;
+  }
+  app.innerHTML=html;
+}
+function confirmClearLog(date){
+  openSheet(`<h3>撤销这天的记录？</h3><p style="color:#6b675c;font-size:13px;margin:8px 0 18px">${fmtDate(date)} 的穿搭记录会被删除，物品本身不受影响。</p>
+    <div style="display:flex;gap:10px"><button class="btn ghost" style="flex:1" onclick="closeSheet()">取消</button><button class="btn coral" style="flex:1" id="okDel">撤销记录</button></div>`,true);
+  $('#okDel').onclick=async()=>{
+    const l=STATE.logs.find(x=>x.date===date);
+    if(l){await dbDel('logs',l.id);await loadState();render()}
+    closeSheet();toast('已撤销记录');
+  };
+}
+
+/* ================= 视图：记录穿搭 ================= */
+let PICK={date:null,selected:new Set(),note:''};
+function viewLog(app,date){
+  const d=date||todayKey();
+  const existing=STATE.logs.find(l=>l.date===d);
+  PICK={date:d,selected:new Set(existing?existing.itemIds:[]),note:existing?existing.note||'':''};
+  const items=activeItems();
+  const back=d===todayKey()?'/today':'/calendar';
+  let html=header(fmtDate(d),wdCN(d)+' · 记录穿搭',`<button class="btn sm ghost" onclick="go('${back}')">${ICON.back}</button>`);
+  if(items.length===0){
+    html+=`<div class="empty"><div class="art">${ICON.plus}</div><h3>衣橱还是空的</h3><p>先添加几件衣物，再回来记录穿搭。</p><button class="btn coral" onclick="go('/edit')">添加第一件衣物</button></div>`;
+    app.innerHTML=html;return;
+  }
+  html+=`<div class="pick-grid" id="pickGrid">`;
+  html+=items.map(it=>{
+    const on=PICK.selected.has(it.id);
+    const nm=esc(it.name||(catById(it.categoryId)||{}).name||'');
+    return `<div class="pick ${on?'on':''}" data-id="${it.id}"><div class="photo" style="background-image:url('${imgUrl(it)}')"></div><div class="check"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#17150E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div><div class="t">${nm}</div></div>`;
+  }).join('');
+  html+=`</div>`;
+  html+=`<div class="label">备注（可不填）</div><textarea class="field" id="pickNote" placeholder="例：今天面试、有人夸这件外套…">${esc(PICK.note)}</textarea>`;
+  html+=`<button class="btn mint block" style="margin-top:20px" id="savePick">完成记录（<span id="pickN">${PICK.selected.size}</span> 件）</button>`;
+  app.innerHTML=html;
+  $('#pickGrid').addEventListener('click',e=>{const el=e.target.closest('.pick');if(el)togglePick(el.dataset.id)});
+  $('#savePick').onclick=savePick;
+}
+function togglePick(id){
+  if(PICK.selected.has(id))PICK.selected.delete(id);else PICK.selected.add(id);
+  const el=document.querySelector(`.pick[data-id="${id}"]`);
+  el.classList.toggle('on',PICK.selected.has(id));
+  $('#pickN').textContent=PICK.selected.size;
+}
+async function savePick(){
+  const note=$('#pickNote').value.trim();
+  if(PICK.selected.size===0){toast('请至少选择一件');return}
+  const existing=STATE.logs.find(l=>l.date===PICK.date);
+  const rec={id:existing?existing.id:uuid(),date:PICK.date,itemIds:[...PICK.selected],note,createdAt:existing?existing.createdAt:Date.now(),updatedAt:Date.now()};
+  await dbPut('logs',rec);
+  await loadState();toast('已记录穿搭');
+  go(PICK.date===todayKey()?'/today':'/calendar');
+}
+/* ================= 视图：衣橱 ================= */
+let W={cat:'all',q:'',sort:'new'};
+function viewWardrobe(app){
+  const all=activeItems();
+  let items=[...all];
+  if(W.cat!=='all')items=items.filter(i=>i.categoryId===W.cat);
+  if(W.q){const q=W.q.toLowerCase();items=items.filter(i=>(i.name||'').toLowerCase().includes(q)||(i.brand||'').toLowerCase().includes(q))}
+  const by={new:(a,b)=>b.createdAt-a.createdAt,price:(a,b)=>(b.price||0)-(a.price||0),wear:(a,b)=>wearCountOf(b.id)-wearCountOf(a.id)};
+  items.sort(by[W.sort]);
+  let html=header('衣橱','WARDROBE',`<button class="btn sm coral" onclick="go('/edit')">＋ 添加</button>`);
+  html+=`<div class="segment" id="catSeg"><button class="chip ${W.cat==='all'?'on':''}" data-cat="all">全部 ${all.length}</button>`;
+  html+=STATE.categories.map(c=>{const n=all.filter(i=>i.categoryId===c.id).length;return `<button class="chip ${W.cat===c.id?'on':''}" data-cat="${c.id}">${esc(c.name)} ${n}</button>`}).join('');
+  html+=`</div>`;
+  html+=`<div class="row" style="gap:8px;margin-bottom:14px"><input class="field" id="wq" placeholder="搜名称 / 品牌" value="${esc(W.q)}" style="flex:1;min-width:0"><select class="field" id="wsort" style="width:120px"><option value="new">最近加入</option><option value="price">价格高→低</option><option value="wear">穿最多</option></select></div>`;
+  if(items.length===0){
+    html+=`<div class="empty"><div class="art">${ICON.plus}</div><h3>${all.length===0?'衣橱还是空的':'没有符合的衣物'}</h3><p>${all.length===0?'开始添加第一件衣物吧。':'换个关键字或分类试试。'}</p>${all.length===0?`<button class="btn coral" onclick="go('/edit')">添加衣物</button>`:''}</div>`;
+  }else{
+    html+=`<div class="grid">`;
+    html+=items.map(it=>{
+      const nm=esc(it.name||(catById(it.categoryId)||{}).name||'');
+      const col=colorById(it.color);
+      return `<div class="item-card" onclick="go('/item/${it.id}')"><div class="photo" style="background-image:url('${imgUrl(it)}')"></div><div class="nm">${nm}</div><div class="meta"><span class="dot" style="background:${col?col.hex:'#ccc'}"></span>${esc((catById(it.categoryId)||{}).name||'')} · 穿${wearCountOf(it.id)}次</div></div>`;
+    }).join('');
+    html+=`</div>`;
+  }
+  const arch=STATE.items.filter(i=>i.status==='archived');
+  if(arch.length)html+=`<button class="btn-soft block" style="margin-top:18px" onclick="go('/archived')">已淘汰归档（${arch.length}）</button>`;
+  app.innerHTML=html;
+  $('#wsort').value=W.sort;
+  $('#catSeg').addEventListener('click',e=>{const b=e.target.closest('[data-cat]');if(b){W.cat=b.dataset.cat;render()}});
+  let searchTimer;
+  $('#wq').addEventListener('input',e=>{W.q=e.target.value;clearTimeout(searchTimer);searchTimer=setTimeout(()=>{render();const el=$('#wq');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length)}},260)});
+  $('#wsort').addEventListener('change',e=>{W.sort=e.target.value;render()});
+}
+
+/* ================= 视图：归档 ================= */
+function viewArchived(app){
+  const arch=STATE.items.filter(i=>i.status==='archived');
+  let html=header('已淘汰','ARCHIVED',`<button class="btn sm ghost" onclick="go('/wardrobe')">${ICON.back}</button>`);
+  html+=`<p style="color:#6b675c;font-size:13px;margin:0 4px 16px">这些衣物已从衣橱移出，可进入后恢复或永久删除。</p>`;
+  if(arch.length===0){html+=`<div class="empty"><h3 style="font-family:var(--font-display)">没有归档物品</h3></div>`}
+  else{html+=`<div class="grid">`+arch.map(it=>`<div class="item-card" onclick="go('/item/${it.id}')"><div class="photo" style="background-image:url('${imgUrl(it)}');filter:grayscale(.6)"></div><div class="nm">${esc(it.name||(catById(it.categoryId)||{}).name||'')}</div></div>`).join('')+`</div>`}
+  app.innerHTML=html;
+}
+/* ================= 视图：添加 / 编辑 ================= */
+let FORM=null;
+async function viewEdit(app,id){
+  let item=null;
+  if(id){item=await dbGet('items',id);if(!item){go('/wardrobe');return}}
+  FORM=item?{...item,seasons:[...(item.seasons||[])],occasions:[...(item.occasions||[])]}
+    :{id:null,categoryId:'',name:'',color:'',brand:'',material:'',size:'',price:'',
+      purchaseDate:'',seasons:[],occasions:[],note:'',imageBlob:null,status:'active',createdAt:Date.now()};
+  let html=header(id?'编辑衣物':'添加衣物',id?'EDIT ITEM':'NEW ITEM',`<button class="btn sm ghost" onclick="go('/wardrobe')">${ICON.back}</button>`);
+  html+=`<div style="text-align:center;margin-bottom:4px">
+    <div id="photoPreview" class="photo" style="height:228px;border-radius:18px;${FORM.imageBlob?`background-image:url('${URL.createObjectURL(FORM.imageBlob)}')`:"display:flex;align-items:center;justify-content:center;background:var(--paper)"}">${FORM.imageBlob?'':`<span style="color:#9a968a;font-size:13px">还没选择照片</span>`}</div>
+    <div style="display:flex;gap:10px;justify-content:center;margin-top:12px">
+      <button class="btn sm yellow" onclick="$('#photoFile').click()">拍照 / 选图</button>
+      ${FORM.imageBlob?`<button class="btn sm ghost" onclick="clearPhoto()">移除</button>`:''}
+    </div>
+    <input type="file" id="photoFile" accept="image/*" capture="environment" style="display:none">
+  </div>`;
+  html+=`<div class="card" style="margin-top:14px">
+    <label class="label">分类 <span class="req">*</span></label>
+    <select class="field" id="fCat"><option value="" disabled ${!FORM.categoryId?'selected':''}>请选择分类</option>
+      ${STATE.categories.map(c=>`<option value="${c.id}" ${FORM.categoryId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}
+    </select>
+    <div style="text-align:right;margin-top:8px"><button class="btn sm ghost" onclick="addCategory()">＋ 自定义分类</button></div>
+    <label class="label">名称</label><input class="field" id="fName" value="${esc(FORM.name)}" placeholder="例：黑色羊毛大衣">
+    <label class="label">主色</label><div style="display:flex;flex-wrap:wrap;gap:9px" id="fColors">
+      ${COLORS.map(c=>`<button class="swatch ${FORM.color===c.id?'on':''}" data-color="${c.id}" style="background:${c.hex}" title="${c.name}"></button>`).join('')}
+    </div>
+    <div class="row" style="gap:10px"><div style="flex:1;min-width:0"><label class="label">品牌</label><input class="field" id="fBrand" value="${esc(FORM.brand)}"></div>
+      <div style="flex:1;min-width:0"><label class="label">尺码</label><input class="field" id="fSize" value="${esc(FORM.size)}"></div></div>
+    <label class="label">材质</label><input class="field" id="fMaterial" value="${esc(FORM.material)}" placeholder="例：羊毛、牛仔、棉麻">
+    <div class="row" style="gap:10px"><div style="flex:1;min-width:0"><label class="label">价格（${STATE.currency}）</label><input class="field" id="fPrice" type="number" inputmode="decimal" value="${FORM.price==null?'':FORM.price}" placeholder="0"></div>
+      <div style="flex:1;min-width:0"><label class="label">购买日期</label><input class="field" id="fDate" type="date" value="${esc(FORM.purchaseDate)}"></div></div>
+    <label class="label">季节</label><div class="segment" id="fSeasons">${SEASONS.map(s=>`<button class="chip ${FORM.seasons.includes(s.id)?'on':''}" data-season="${s.id}">${s.name}</button>`).join('')}</div>
+    <label class="label">场合</label><div class="segment" id="fOcc">${OCCASIONS.map(o=>`<button class="chip ${FORM.occasions.includes(o.id)?'on':''}" data-occ="${o.id}">${o.name}</button>`).join('')}</div>
+    <label class="label">备注</label><textarea class="field" id="fNote" placeholder="产地、洗涤方式、备注…">${esc(FORM.note)}</textarea>
+  </div>`;
+  html+=`<button class="btn blue block" style="margin-top:18px" id="saveItem">${id?'保存变更':'添加衣物'}</button>`;
+  if(id)html+=`<button class="btn ghost block" style="margin-top:10px" onclick="confirmDeleteItem('${id}')">删除这件衣物</button>`;
+  app.innerHTML=html;
+  bindEdit();
+}
+function bindEdit(){
+  $('#photoFile').addEventListener('change',async e=>{
+    const f=e.target.files[0];if(!f)return;
+    FORM.imageBlob=await compressImage(f);
+    const p=$('#photoPreview');p.style.display='';p.style.backgroundImage=`url('${URL.createObjectURL(FORM.imageBlob)}')`;p.innerHTML='';
+  });
+  $('#fColors').addEventListener('click',e=>{const b=e.target.closest('[data-color]');if(b){FORM.color=FORM.color===b.dataset.color?'':b.dataset.color;document.querySelectorAll('#fColors .swatch').forEach(x=>x.classList.toggle('on',x.dataset.color===FORM.color))}});
+  $('#fSeasons').addEventListener('click',e=>{const b=e.target.closest('[data-season]');if(b){const s=b.dataset.season;FORM.seasons=FORM.seasons.includes(s)?FORM.seasons.filter(x=>x!==s):[...FORM.seasons,s];b.classList.toggle('on')}});
+  $('#fOcc').addEventListener('click',e=>{const b=e.target.closest('[data-occ]');if(b){const s=b.dataset.occ;FORM.occasions=FORM.occasions.includes(s)?FORM.occasions.filter(x=>x!==s):[...FORM.occasions,s];b.classList.toggle('on')}});
+  $('#saveItem').onclick=async()=>{
+    if(!$('#fCat').value){toast('请选择分类');return}
+    const isEdit=!!FORM.id;
+    const rec={
+      id:FORM.id||uuid(),
+      name:$('#fName').value.trim(),
+      categoryId:$('#fCat').value,
+      color:FORM.color,
+      brand:$('#fBrand').value.trim(),
+      size:$('#fSize').value.trim(),
+      material:$('#fMaterial').value.trim(),
+      price:$('#fPrice').value===''?null:Number($('#fPrice').value),
+      currency:STATE.currency,
+      purchaseDate:$('#fDate').value||'',
+      seasons:FORM.seasons,occasions:FORM.occasions,
+      note:$('#fNote').value.trim(),
+      imageBlob:FORM.imageBlob,
+      status:FORM.status,
+      createdAt:FORM.createdAt||Date.now(),updatedAt:Date.now()
+    };
+    await dbPut('items',rec);urlCache.delete(rec.id);
+    await loadState();toast(isEdit?'已保存':'已添加');go('/wardrobe');
+  };
+}
+function clearPhoto(){FORM.imageBlob=null;const p=$('#photoPreview');p.style.backgroundImage='';p.style.display='flex';p.innerHTML='<span style="color:#9a968a;font-size:13px">还没选择照片</span>'}
+function addCategory(){
+  openSheet(`<h3>添加自定义分类</h3><input class="field" id="newCat" placeholder="分类名称，例：围巾" style="margin-top:14px"><div style="display:flex;gap:10px;margin-top:18px"><button class="btn ghost" style="flex:1" onclick="closeSheet()">取消</button><button class="btn blue" style="flex:1" id="okCat">添加</button></div>`,true);
+  setTimeout(()=>{$('#newCat')&&$('#newCat').focus()},280);
+  $('#okCat').onclick=async()=>{
+    const name=$('#newCat').value.trim();if(!name){toast('请输入名称');return}
+    const id='c-'+uuid().slice(0,8);
+    await dbPut('categories',{id,name,isCustom:true});
+    await loadState();closeSheet();
+    const sel=$('#fCat');const o=document.createElement('option');o.value=id;o.textContent=name;sel.appendChild(o);sel.value=id;
+    toast('已添加分类');
+  };
+}
+async function archiveItem(id){const it=await dbGet('items',id);it.status='archived';it.updatedAt=Date.now();await dbPut('items',it);await loadState();toast('已归档');go('/wardrobe')}
+async function restoreItem(id){const it=await dbGet('items',id);it.status='active';it.updatedAt=Date.now();await dbPut('items',it);await loadState();toast('已恢复');render()}
+function confirmDeleteItem(id){
+  openSheet(`<h3>删除这件衣物？</h3><p style="color:#6b675c;font-size:13px;margin:8px 0 18px">会连同照片一起删除，且无法恢复。</p><div style="display:flex;gap:10px"><button class="btn ghost" style="flex:1" onclick="closeSheet()">取消</button><button class="btn coral" style="flex:1" id="okPD">删除</button></div>`,true);
+  $('#okPD').onclick=async()=>{
+    await dbDel('items',id);urlCache.delete(id);
+    for(const l of STATE.logs)if(l.itemIds.includes(id)){l.itemIds=l.itemIds.filter(x=>x!==id);await dbPut('logs',l)}
+    await loadState();closeSheet();toast('已删除');go('/wardrobe');
+  };
+}
+/* ================= 视图：物品详情 ================= */
+async function viewItem(app,id){
+  const it=await dbGet('items',id);
+  if(!it){go('/wardrobe');return}
+  const col=colorById(it.color);
+  const catName=(catById(it.categoryId)||{}).name||'';
+  let html=header('单品详情','ITEM DETAIL',`<button class="btn sm ghost" onclick="go('/wardrobe')">${ICON.back}</button>`);
+  if(it.imageBlob)html+=`<div class="photo detail-photo" style="background-image:url('${imgUrl(it)}')"></div>`;
+  else html+=`<div class="photo detail-photo" style="display:flex;align-items:center;justify-content:center;background:var(--paper)"><span style="color:#9a968a">无照片</span></div>`;
+  html+=`<div style="font-family:var(--font-display);font-size:22px;margin:16px 2px 8px">${esc(it.name||catName||'未命名')}</div>`;
+  html+=`<div class="row" style="gap:8px;flex-wrap:wrap"><span class="chip">${esc(catName)}</span>${col?`<span class="chip"><span class="dot" style="background:${col.hex}"></span>${col.name}</span>`:''}${it.status==='archived'?'<span class="chip" style="background:#ddd">已淘汰</span>':''}</div>`;
+  html+=`<div class="kpis">
+    <div class="kpi"><div class="n">${wearCountOf(id)}</div><div class="l">穿着次数</div></div>
+    <div class="kpi"><div class="n" style="font-size:17px">${fmtCpw(it)}</div><div class="l">单次成本</div></div>
+    <div class="kpi"><div class="n">${it.status==='archived'?'—':idleDays(it)}</div><div class="l">闲置天数</div></div>
+  </div>`;
+  const rows=[
+    ['品牌',it.brand],['尺码',it.size],['材质',it.material],
+    ['购买价',it.price!=null?fmtMoney(it.price,it.currency):''],['购买日期',it.purchaseDate?fmtDate(it.purchaseDate):''],
+    ['季节',it.seasons.map(s=>cName(s,SEASONS)).join('、')],['场合',it.occasions.map(o=>cName(o,OCCASIONS)).join('、')],
+    ['备注',it.note]
+  ];
+  const filled=rows.filter(r=>r[1]);
+  if(filled.length){html+=`<div class="card">`+filled.map(r=>`<div class="set-row"><div class="l">${r[0]}</div><div class="d" style="max-width:62%;text-align:right">${esc(r[1])}</div></div>`).join('')+`</div>`}
+  const hist=STATE.logs.filter(l=>l.itemIds.includes(id)).sort((a,b)=>b.date.localeCompare(a.date));
+  if(hist.length){
+    html+=`<div class="label" style="margin:22px 4px 8px">穿着历史（${hist.length}）</div><div class="card tight">`;
+    html+=hist.map(l=>`<div class="history-item" onclick="go('/log/${l.date}')"><div class="photo" style="background-image:url('${imgUrl(it)}')"></div><div class="grow"><div style="font-weight:700;font-size:14px">${fmtDate(l.date)} <span style="color:#7b776b;font-weight:400">${wdCN(l.date)}</span></div>${l.note?`<div style="font-size:12px;color:#7b776b">${esc(l.note)}</div>`:''}</div><div style="color:#7b776b">${ICON.chevron}</div></div>`).join('');
+    html+=`</div>`;
+  }
+  html+=`<div class="row" style="gap:10px;margin-top:20px"><button class="btn blue block" onclick="go('/edit/${id}')">编辑</button>`;
+  if(it.status!=='archived')html+=`<button class="btn yellow block" onclick="archiveItem('${id}')">归档淘汰</button>`;
+  else html+=`<button class="btn mint block" onclick="restoreItem('${id}')">恢复使用</button>`;
+  html+=`</div><button class="btn ghost block" style="margin-top:10px" onclick="confirmDeleteItem('${id}')">删除</button>`;
+  app.innerHTML=html;
+}
+/* ================= 视图：日历 ================= */
+let CAL={y:null,m:null};
+function viewCalendar(app){
+  const now=new Date(),tk=todayKey();
+  if(CAL.y==null){CAL.y=now.getFullYear();CAL.m=now.getMonth()}
+  const startDow=new Date(CAL.y,CAL.m,1).getDay();
+  const daysIn=new Date(CAL.y,CAL.m+1,0).getDate();
+  const prevDays=new Date(CAL.y,CAL.m,0).getDate();
+  let cells=[];
+  for(let i=0;i<startDow;i++)cells.push({day:prevDays-startDow+1+i,other:true,date:dateKey(new Date(CAL.y,CAL.m-1,prevDays-startDow+1+i))});
+  for(let d=1;d<=daysIn;d++){const date=dateKey(new Date(CAL.y,CAL.m,d));cells.push({day:d,date,marked:STATE.logs.some(l=>l.date===date),today:date===tk})}
+  const trail=(7-cells.length%7)%7;
+  for(let i=1;i<=trail;i++)cells.push({day:i,other:true,date:dateKey(new Date(CAL.y,CAL.m+1,i))});
+  let html=header('日历','CALENDAR');
+  html+=`<div class="card">
+    <div class="cal-head">
+      <button class="btn sm ghost" id="calPrev"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <div class="m">${CAL.y}年${CAL.m+1}月</div>
+      <button class="btn sm ghost" id="calNext"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>
+    </div>
+    <div class="cal-grid" id="calGrid">
+      ${WD.map(w=>`<div class="cal-dow">周${w}</div>`).join('')}
+      ${cells.map(c=>`<div class="cal-day ${c.other?'other':''} ${c.today?'today':''} ${c.marked?'marked':''}" data-date="${c.date}"><span>${c.day}</span>${c.marked?`<span class="mk"><i></i></span>`:''}</div>`).join('')}
+    </div>
+  </div>`;
+  const monthLogs=STATE.logs.filter(l=>{const d=parseKey(l.date);return d.getFullYear()===CAL.y&&d.getMonth()===CAL.m});
+  const times=monthLogs.reduce((s,l)=>s+l.itemIds.length,0);
+  html+=`<div class="card tight" style="margin-top:14px"><div class="row"><div class="grow"><div style="font-weight:700">本月记录 ${monthLogs.length} 天</div><div style="font-size:12px;color:#7b776b">${monthLogs.length?`共穿 ${times} 件次`:'还没有记录'}</div></div><button class="btn sm yellow" onclick="go('/log/${tk}')">记录今日</button></div></div>`;
+  app.innerHTML=html;
+  $('#calPrev').onclick=()=>{CAL.m--;if(CAL.m<0){CAL.m=11;CAL.y--}render()};
+  $('#calNext').onclick=()=>{CAL.m++;if(CAL.m>11){CAL.m=0;CAL.y++}render()};
+  $('#calGrid').addEventListener('click',e=>{const el=e.target.closest('.cal-day');if(el&&!el.classList.contains('other'))go('/log/'+el.dataset.date)});
+}
+/* ================= 视图：统计 ================= */
+let STAB='cpw';
+const BAR=['var(--blue)','var(--coral)','var(--mint)','var(--yellow)','var(--pink)','var(--violet)'];
+function idleGroup(tag,list,bg){
+  return `<div class="idle-group"><div class="hd"><span class="tag" style="background:${bg}">${tag}</span><span style="font-size:12px;color:#7b776b">${list.length} 件</span></div>
+    <div class="idle-strip">`+list.map(x=>`<div class="photo" style="background-image:url('${imgUrl(x.i)}')" onclick="go('/item/${x.i.id}')"></div>`).join('')+`</div></div>`;
+}
+function viewStats(app){
+  const items=activeItems(),tk=todayKey();
+  let html=header('统计','STATISTICS');
+  if(items.length===0){
+    html+=`<div class="empty"><div class="art">${ICON.plus}</div><h3>还没有数据</h3><p>添加衣物、记录穿搭后，这里会出现单次成本与闲置分析。</p><button class="btn coral" onclick="go('/edit')">添加衣物</button></div>`;
+    app.innerHTML=html;return;
+  }
+  const totalValue=items.reduce((s,i)=>s+(Number(i.price)||0),0);
+  const totalWear=STATE.logs.reduce((s,l)=>s+l.itemIds.length,0);
+  html+=`<div class="card" style="background:var(--ink);color:var(--paper)">
+    <div class="row" style="gap:14px;flex-wrap:wrap">
+      <div style="flex:1;min-width:90px"><div class="stat-big" style="color:var(--yellow)">${items.length}</div><div style="font-size:12px;opacity:.8;margin-top:4px">衣橱衣物</div></div>
+      <div style="flex:1;min-width:130px"><div class="stat-big" style="color:var(--mint);font-size:29px">${fmtMoney(totalValue,STATE.currency)}</div><div style="font-size:12px;opacity:.8;margin-top:4px">衣物总价值</div></div>
+      <div style="flex:1;min-width:90px"><div class="stat-big" style="color:var(--pink)">${totalWear}</div><div style="font-size:12px;opacity:.8;margin-top:4px">累计穿着</div></div>
+    </div></div>`;
+  // 品类分布
+  const cats=STATE.categories.map(c=>{const l=items.filter(i=>i.categoryId===c.id);return{name:c.name,n:l.length,val:l.reduce((s,i)=>s+(Number(i.price)||0),0)}}).filter(x=>x.n>0).sort((a,b)=>b.n-a.n);
+  const maxN=Math.max(...cats.map(c=>c.n),1);
+  html+=`<div class="label" style="margin:22px 4px 8px">品类分布</div><div class="card">`;
+  html+=cats.map((c,idx)=>`<div style="margin-bottom:11px"><div class="row" style="font-size:13px;margin-bottom:5px"><span style="font-weight:700">${esc(c.name)}</span><span class="grow"></span><span style="color:#7b776b">${c.n} 件 · ${fmtMoney(c.val,STATE.currency)}</span></div>
+    <div style="height:12px;border-radius:6px;box-shadow:var(--soft-inset)"><div style="height:12px;border-radius:6px;width:${Math.round(c.n/maxN*100)}%;background:${BAR[idx%BAR.length]}"></div></div></div>`).join('');
+  html+=`</div>`;
+  // 闲置
+  const idle=items.map(i=>({i,d:idleDays(i,tk)})).filter(x=>x.d>=30).sort((a,b)=>b.d-a.d);
+  if(idle.length){
+    html+=`<div class="label" style="margin:22px 4px 8px">闲置提醒</div>`;
+    const g90=idle.filter(x=>x.d>=90),g30=idle.filter(x=>x.d<90);
+    if(g90.length)html+=idleGroup('90 天以上',g90,'var(--coral)');
+    if(g30.length)html+=idleGroup('30–90 天',g30,'var(--yellow)');
+  }
+  // 排行
+  html+=`<div class="label" style="margin:22px 4px 8px">单品排行</div>
+    <div class="stat-tabs">
+      <button class="btn ${STAB==='cpw'?'yellow':'ghost'}" data-stab="cpw">单次成本高</button>
+      <button class="btn ${STAB==='fewest'?'yellow':'ghost'}" data-stab="fewest">穿最少</button>
+      <button class="btn ${STAB==='idle'?'yellow':'ghost'}" data-stab="idle">闲置最久</button>
+    </div>`;
+  let ranks=[];
+  if(STAB==='cpw')ranks=items.filter(i=>cpwOf(i)!=null).map(i=>({i,v:cpwOf(i),sub:`穿 ${wearCountOf(i.id)} 次 · ${fmtMoney(i.price,i.currency)}`,money:true})).sort((a,b)=>b.v-a.v);
+  if(STAB==='fewest')ranks=items.map(i=>({i,v:wearCountOf(i.id),sub:`${lastWornOf(i.id)?fmtDate(lastWornOf(i.id)):'还没穿过'}`})).sort((a,b)=>a.v-b.v);
+  if(STAB==='idle')ranks=items.map(i=>({i,v:idleDays(i,tk),sub:`${lastWornOf(i.id)?fmtDate(lastWornOf(i.id)):'还没穿过'}`})).sort((a,b)=>b.v-a.v);
+  html+=`<div class="card">`;
+  html+=ranks.slice(0,20).map((r,idx)=>{
+    const i=r.i;
+    const vt=r.money?(curSym(STATE.currency)+(r.v>=100?Math.round(r.v):r.v.toFixed(1))):r.v+(STAB==='idle'?' 天':' 次');
+    return `<div class="rank-row" onclick="go('/item/${i.id}')"><div class="idx">${idx+1}</div><div class="photo" style="background-image:url('${imgUrl(i)}')"></div><div class="grow"><div style="font-weight:700;font-size:13.5px">${esc(i.name||(catById(i.categoryId)||{}).name||'')}</div><div class="sub">${r.sub}</div></div><div class="val">${vt}</div></div>`;
+  }).join('');
+  html+=`</div>`;
+  app.innerHTML=html;
+  document.querySelectorAll('[data-stab]').forEach(b=>b.onclick=()=>{STAB=b.dataset.stab;render()});
+}
+/* ================= 视图：设置 ================= */
+function viewSettings(app){
+  let html=header('设置','SETTINGS');
+  html+=`<div class="card">
+    <div class="set-row">
+      <div class="grow"><div class="l">货币</div><div class="d">添加衣物和统计时使用的货币</div></div>
+      <select class="field cur-select" id="setCur" style="flex-shrink:0">${CURRENCIES.map(c=>`<option value="${c.code}" ${STATE.currency===c.code?'selected':''}>${c.code}</option>`).join('')}</select>
+    </div>
+    <div class="set-row">
+      <div class="grow"><div class="l">导出备份</div><div class="d">把所有物品、照片和穿搭记录存成一个文件</div></div>
+      <button class="btn sm blue" onclick="exportData()">导出</button>
+    </div>
+    <div class="set-row" style="border-bottom:none">
+      <div class="grow"><div class="l">导入还原</div><div class="d">从备份文件读取，可合并或替换现有数据</div></div>
+      <button class="btn sm yellow" onclick="$('#importFile').click()">导入</button>
+    </div>
+  </div>
+  <input type="file" id="importFile" accept="application/json" style="display:none">
+  <div class="card" style="margin-top:14px">
+    <div class="set-row">
+      <div class="grow"><div class="l">安装到主屏幕</div><div class="d">在浏览器菜单选择「添加到主屏幕」即可离线使用</div></div>
+    </div>
+    <div class="set-row" style="border-bottom:none">
+      <div class="grow"><div class="l">数据隐私</div><div class="d">所有数据只存在这个浏览器，不会上传</div></div>
+    </div>
+  </div>
+  <div class="about"><div class="logo">WARDROBE</div>个人衣物与穿搭管理 · v0.1</div>`;
+  app.innerHTML=html;
+  $('#setCur').onchange=async e=>{STATE.currency=e.target.value;await setSetting('currency',STATE.currency);await loadState();toast('已切换货币')};
+  $('#importFile').onchange=importData;
+}
+
+/* ================= 备份：导出 / 导入 ================= */
+const blobToDataURL=b=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(b)});
+function dataURLToBlob(u){
+  const[m,d]=u.split(',');const mime=(m.match(/data:(.*?);/)||[])[1]||'image/jpeg';
+  const bin=atob(d),arr=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);
+  return new Blob([arr],{type:mime});
+}
+async function exportData(){
+  toast('准备备份中…');
+  const items=[];
+  for(const i of STATE.items){
+    const cp={...i};
+    if(i.imageBlob){cp.imageData=await blobToDataURL(i.imageBlob);delete cp.imageBlob}
+    items.push(cp);
+  }
+  const data={app:'wardrobe',version:1,exportedAt:new Date().toISOString(),items,logs:STATE.logs,categories:STATE.categories};
+  const blob=new Blob([JSON.stringify(data)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download=`wardrobe-backup-${todayKey()}.json`;a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+  toast('已导出备份');
+}
+function importData(e){
+  const f=e.target.files[0];if(!f)return;
+  e.target.value='';
+  const r=new FileReader();
+  r.onload=()=>{
+    let data;
+    try{data=JSON.parse(r.result);if(data.app!=='wardrobe')throw 0}catch(_){toast('文件格式不正确');return}
+    openSheet(`<h3>导入备份？</h3><p style="color:#6b675c;font-size:13px;margin:8px 0 18px">侦测到 ${data.items.length} 件物品、${data.logs.length} 天记录，请选择导入方式：</p>
+      <button class="btn yellow block" id="mergeImp" style="margin-bottom:10px">合并（保留现有，跳过重复）</button>
+      <button class="btn coral block" id="replaceImp">全部替换（清空现有数据）</button>
+      <button class="btn ghost block" style="margin-top:10px" onclick="closeSheet()">取消</button>`);
+    $('#mergeImp').onclick=()=>doImport(data,false);
+    $('#replaceImp').onclick=()=>doImport(data,true);
+  };
+  r.readAsText(f);
+}
+async function doImport(data,replace){
+  closeSheet();toast('导入中…');
+  if(replace){
+    for(const i of STATE.items)await dbDel('items',i.id);
+    for(const l of STATE.logs)await dbDel('logs',l.id);
+  }
+  for(const c of data.categories)
+    if(!STATE.categories.find(x=>x.id===c.id))await dbPut('categories',c);
+  const existIds=new Set(STATE.items.map(i=>i.id));
+  for(const it of data.items){
+    const rec={...it};
+    if(rec.imageData){rec.imageBlob=dataURLToBlob(rec.imageData);delete rec.imageData}
+    if(replace||!existIds.has(rec.id))await dbPut('items',rec);
+  }
+  const existDates=new Set(STATE.logs.map(l=>l.date));
+  for(const l of data.logs)
+    if(replace||!existDates.has(l.date))await dbPut('logs',l);
+  urlCache.clear();
+  await loadState();render();toast('导入完成');
+}
+/* ================= 启动 ================= */
+(async function init(){
+  await openDB();
+  await ensureCategories();
+  await syncBuiltinCategories();
+  await loadState();
+  if(!location.hash)location.hash='#/today';
+  render();
+  if('serviceWorker' in navigator)
+    window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "我的衣橱 · Wardrobe",
+  "short_name": "衣橱",
+  "description": "个人衣物和穿搭记录、CPW 统计",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#E6E3DB",
+  "theme_color": "#E6E3DB",
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
+    {"src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable"}
+  ]
+}
