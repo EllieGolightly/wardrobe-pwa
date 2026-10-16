@@ -326,6 +326,12 @@ async function compressImage(file){
   cv.getContext('2d').drawImage(img,0,0,w,h);
   return new Promise(res=>cv.toBlob(b=>res(b),'image/jpeg',0.82));
 }
+// 把惰性 Blob 完整读取并重建为内存 Blob，确保 objectURL 立即可用（手机端首次渲染不空白）
+async function readyBlob(blob){
+  if(!blob)return blob;
+  const buf=await blob.arrayBuffer();
+  return new Blob([buf],{type:blob.type||'image/jpeg'});
+}
 const urlCache=new Map();
 function imgUrl(item){
   if(!item||!item.imageBlob)return '';
@@ -411,6 +417,9 @@ async function loadState(){
   sortCategories();
   STATE.currency=await getSetting('currency','CNY');
   STATE.startDate=await getSetting('startDate','');
+  // 统一把照片物化为内存 Blob，避免手机端惰性 Blob 首次渲染空白
+  for(const it of STATE.items)
+    if(it.imageBlob)it.imageBlob=await readyBlob(it.imageBlob);
 }
 function sortCategories(){
   const order=Object.fromEntries(DEFAULT_CATEGORIES.map((c,i)=>[c.id,i]));
@@ -644,7 +653,9 @@ function viewArchived(app){
 let FORM=null;
 async function viewEdit(app,id){
   let item=null;
-  if(id){item=await dbGet('items',id);if(!item){go('/wardrobe');return}}
+  if(id){item=await dbGet('items',id);if(!item){go('/wardrobe');return}
+    if(item.imageBlob)item.imageBlob=await readyBlob(item.imageBlob);
+  }
   FORM=item?{...item,seasons:[...(item.seasons||[])],occasions:[...(item.occasions||[])]}
     :{id:null,categoryId:'',name:'',color:'',brand:'',material:'',size:'',price:'',
       purchaseDate:'',priorWears:'',seasons:[],occasions:[],note:'',imageBlob:null,status:'active',createdAt:Date.now()};
