@@ -382,19 +382,21 @@ async function migrateSubcategories(){
   if(await getSetting('subcatMigrated',0))return;
   const has=(s,ks)=>ks.some(k=>s.includes(k));
   for(const it of STATE.items){
-    const n=(it.name||'').toLowerCase();
+    const n=(it.name||'').toLowerCase();let newCat='';
     if(it.categoryId==='top'){
-      if(has(n,['短袖','半袖']))it.categoryId='short-sleeve';
-      else if(has(n,['毛衣','针织','卫衣','开衫','线衫','毛衫']))it.categoryId='sweater';
-      else if(has(n,['长袖']))it.categoryId='long-sleeve';
-      else if(has(n,['t恤','tee','polo']))it.categoryId='short-sleeve';
-      else if(has(n,['衬衫','衬衣','打底','衫']))it.categoryId='long-sleeve';
-      else continue;
+      if(has(n,['短袖','半袖']))newCat='short-sleeve';
+      else if(has(n,['毛衣','针织','卫衣','开衫','线衫','毛衫']))newCat='sweater';
+      else if(has(n,['长袖']))newCat='long-sleeve';
+      else if(has(n,['t恤','tee','polo']))newCat='short-sleeve';
+      else if(has(n,['衬衫','衬衣','打底','衫']))newCat='long-sleeve';
     }else if(it.categoryId==='bottom'){
-      if(n.includes('裙'))it.categoryId='skirt';
-      else if(n.includes('裤'))it.categoryId='pants';
-      else continue;
-    }else continue;
+      if(n.includes('裙'))newCat='skirt';
+      else if(n.includes('裤'))newCat='pants';
+    }
+    if(!newCat)continue;
+    // 先把照片数据完整读取（物化），避免手机端惰性 Blob 重存后首次显示空白
+    if(it.imageBlob){try{await it.imageBlob.arrayBuffer()}catch(e){}}
+    it.categoryId=newCat;
     await dbPut('items',it);
   }
   await setSetting('subcatMigrated',1);
