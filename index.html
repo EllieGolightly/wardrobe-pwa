@@ -221,6 +221,8 @@ select.field{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xml
 .cal-day.other{opacity:.35}
 .cal-day.today{border:2.5px solid var(--blue);color:var(--blue)}
 .cal-day.marked{background:var(--yellow);border:2px solid var(--ink);box-shadow:var(--hard-sm)}
+.cal-day.selected{background:var(--blue);color:#fff;border:2px solid var(--ink);box-shadow:var(--hard-sm)}
+.cal-day.selected .mk i{background:#fff}
 .cal-day .mk{display:flex;gap:3px}
 .cal-day .mk i{width:5px;height:5px;border-radius:50%;background:var(--ink)}
 
@@ -268,7 +270,8 @@ select.field{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xml
 /* ============ JS 占位，后续批量实现 ============ */
 /* ================= 常量 ================= */
 const DEFAULT_CATEGORIES=[
-  {id:'top',name:'上衣'},{id:'bottom',name:'下装'},{id:'dress',name:'连体'},
+  {id:'short-sleeve',name:'短袖'},{id:'long-sleeve',name:'长袖'},{id:'sweater',name:'毛衣'},
+  {id:'pants',name:'裤子'},{id:'skirt',name:'半裙'},{id:'dress',name:'连体'},
   {id:'outer',name:'外套'},{id:'shoes',name:'鞋'},{id:'bag',name:'包'},
   {id:'hat',name:'帽子'},{id:'accessory',name:'配饰'},{id:'other',name:'其他'}
 ];
@@ -361,8 +364,8 @@ async function ensureCategories(){
   const c=await dbAll('categories');
   if(c.length===0)for(const x of DEFAULT_CATEGORIES)await dbPut('categories',x);
 }
-const CAT_LABEL_VERSION=2;
-// 把旧版本写入的内置分类名称（如繁体、连身）同步为最新简体，自定义分类不动
+const CAT_LABEL_VERSION=3;
+// 同步内置分类：名称更新、新增细分品类；自定义分类不动
 async function syncBuiltinCategories(){
   const v=await getSetting('catVersion',0);
   if(Number(v)>=CAT_LABEL_VERSION)return;
@@ -374,6 +377,28 @@ async function syncBuiltinCategories(){
   }
   await setSetting('catVersion',CAT_LABEL_VERSION);
 }
+// 把旧「上衣/下装」衣物按名称关键词迁移到细分品类（只迁移一次，识别不了的保留原分类）
+async function migrateSubcategories(){
+  if(await getSetting('subcatMigrated',0))return;
+  const has=(s,ks)=>ks.some(k=>s.includes(k));
+  for(const it of STATE.items){
+    const n=(it.name||'').toLowerCase();
+    if(it.categoryId==='top'){
+      if(has(n,['短袖','半袖']))it.categoryId='short-sleeve';
+      else if(has(n,['毛衣','针织','卫衣','开衫','线衫','毛衫']))it.categoryId='sweater';
+      else if(has(n,['长袖']))it.categoryId='long-sleeve';
+      else if(has(n,['t恤','tee','polo']))it.categoryId='short-sleeve';
+      else if(has(n,['衬衫','衬衣','打底','衫']))it.categoryId='long-sleeve';
+      else continue;
+    }else if(it.categoryId==='bottom'){
+      if(n.includes('裙'))it.categoryId='skirt';
+      else if(n.includes('裤'))it.categoryId='pants';
+      else continue;
+    }else continue;
+    await dbPut('items',it);
+  }
+  await setSetting('subcatMigrated',1);
+}
 
 /* ================= 状态 ================= */
 let STATE={items:[],logs:[],categories:[],currency:'CNY'};
@@ -381,7 +406,16 @@ async function loadState(){
   STATE.items=await dbAll('items');
   STATE.logs=await dbAll('logs');
   STATE.categories=await dbAll('categories');
+  sortCategories();
   STATE.currency=await getSetting('currency','CNY');
+}
+function sortCategories(){
+  const order=Object.fromEntries(DEFAULT_CATEGORIES.map((c,i)=>[c.id,i]));
+  STATE.categories.sort((a,b)=>{
+    const oa=order[a.id]!=null?order[a.id]:(a.isCustom?2000:1000);
+    const ob=order[b.id]!=null?order[b.id]:(b.isCustom?2000:1000);
+    return oa-ob||(a.createdAt||0)-(b.createdAt||0);
+  });
 }
 /* ================= 统计计算 ================= */
 function wearCountOf(id){return STATE.logs.reduce((n,l)=>n+(l.itemIds.includes(id)?1:0),0)}
@@ -477,7 +511,7 @@ let PICK={date:null,selected:new Set(),note:''};
 function viewLog(app,date){
   const d=date||todayKey();
   const existing=STATE.logs.find(l=>l.date===d);
-  PICK={date:d,selected:new Set(existing?existing.itemIds:[]),note:existing?existing.note||'':''};
+  PICK={date:d,selected:new Set(existing?existing.itemIds:[]),note:existing?existing.note||'':'',filter:{cat:'',season:''}};
   const items=activeItems();
   const back=d===todayKey()?'/today':'/calendar';
   let html=header(fmtDate(d),wdCN(d)+' · 记录穿搭',`<button class="btn sm ghost" onclick="go('${back}')">${ICON.back}</button>`);
@@ -485,18 +519,46 @@ function viewLog(app,date){
     html+=`<div class="empty"><div class="art">${ICON.plus}</div><h3>衣橱还是空的</h3><p>先添加几件衣物，再回来记录穿搭。</p><button class="btn coral" onclick="go('/edit')">添加第一件衣物</button></div>`;
     app.innerHTML=html;return;
   }
-  html+=`<div class="pick-grid" id="pickGrid">`;
-  html+=items.map(it=>{
-    const on=PICK.selected.has(it.id);
-    const nm=esc(it.name||(catById(it.categoryId)||{}).name||'');
-    return `<div class="pick ${on?'on':''}" data-id="${it.id}"><div class="photo" style="background-image:url('${imgUrl(it)}')"></div><div class="check"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#17150E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div><div class="t">${nm}</div></div>`;
-  }).join('');
-  html+=`</div>`;
+  html+=`<div class="card" style="padding:14px;margin-bottom:12px">
+    <select class="field" id="pickCat" style="margin-bottom:10px">
+      <option value="">全部品类</option>
+      ${STATE.categories.map(c=>`<option value="${c.id}" ${PICK.filter.cat===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}
+    </select>
+    <div class="segment" id="pickSeason" style="flex-wrap:wrap">
+      <button class="chip ${!PICK.filter.season?'on':''}" data-season="">全部</button>
+      ${SEASONS.map(s=>`<button class="chip ${PICK.filter.season===s.id?'on':''}" data-season="${s.id}">${s.name}</button>`).join('')}
+    </div>
+  </div>`;
+  html+=`<div class="pick-grid" id="pickGrid">${pickGridHTML()}</div>`;
   html+=`<div class="label">备注（可不填）</div><textarea class="field" id="pickNote" placeholder="例：今天面试、有人夸这件外套…">${esc(PICK.note)}</textarea>`;
   html+=`<button class="btn mint block" style="margin-top:20px" id="savePick">完成记录（<span id="pickN">${PICK.selected.size}</span> 件）</button>`;
   app.innerHTML=html;
   $('#pickGrid').addEventListener('click',e=>{const el=e.target.closest('.pick');if(el)togglePick(el.dataset.id)});
+  $('#pickCat').addEventListener('change',e=>{PICK.filter.cat=e.target.value;$('#pickGrid').innerHTML=pickGridHTML()});
+  $('#pickSeason').addEventListener('click',e=>{
+    const b=e.target.closest('[data-season]');if(!b)return;
+    PICK.filter.season=b.dataset.season;
+    $('#pickSeason').querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x.dataset.season===PICK.filter.season));
+    $('#pickGrid').innerHTML=pickGridHTML();
+  });
   $('#savePick').onclick=savePick;
+}
+function filteredPool(){
+  const f=PICK.filter;
+  return activeItems().filter(it=>{
+    if(f.cat&&it.categoryId!==f.cat)return false;
+    if(f.season&&!(it.seasons||[]).includes(f.season))return false;
+    return true;
+  });
+}
+function pickGridHTML(){
+  const items=filteredPool();
+  if(!items.length)return `<div style="grid-column:1/-1;padding:28px 10px;text-align:center;color:#7b776b;font-size:13px">没有符合筛选条件的衣物</div>`;
+  return items.map(it=>{
+    const on=PICK.selected.has(it.id);
+    const nm=esc(it.name||(catById(it.categoryId)||{}).name||'');
+    return `<div class="pick ${on?'on':''}" data-id="${it.id}"><div class="photo" style="background-image:url('${imgUrl(it)}')"></div><div class="check"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#17150E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div><div class="t">${nm}</div></div>`;
+  }).join('');
 }
 function togglePick(id){
   if(PICK.selected.has(id))PICK.selected.delete(id);else PICK.selected.add(id);
@@ -524,7 +586,8 @@ function viewWardrobe(app){
   items.sort(by[W.sort]);
   let html=header('衣橱','WARDROBE',`<button class="btn sm coral" onclick="go('/edit')">＋ 添加</button>`);
   html+=`<div class="segment" id="catSeg"><button class="chip ${W.cat==='all'?'on':''}" data-cat="all">全部 ${all.length}</button>`;
-  html+=STATE.categories.map(c=>{const n=all.filter(i=>i.categoryId===c.id).length;return `<button class="chip ${W.cat===c.id?'on':''}" data-cat="${c.id}">${esc(c.name)} ${n}</button>`}).join('');
+  const cc=STATE.categories.map(c=>({c,n:all.filter(i=>i.categoryId===c.id).length})).filter(x=>x.n>0).sort((a,b)=>b.n-a.n);
+  html+=cc.map(x=>`<button class="chip ${W.cat===x.c.id?'on':''}" data-cat="${x.c.id}">${esc(x.c.name)} ${x.n}</button>`).join('');
   html+=`</div>`;
   html+=`<div class="row" style="gap:8px;margin-bottom:14px"><input class="field" id="wq" placeholder="搜名称 / 品牌" value="${esc(W.q)}" style="flex:1;min-width:0"><select class="field" id="wsort" style="width:120px"><option value="new">最近加入</option><option value="price">价格高→低</option><option value="wear">穿最多</option></select></div>`;
   if(items.length===0){
@@ -695,10 +758,11 @@ async function viewItem(app,id){
   app.innerHTML=html;
 }
 /* ================= 视图：日历 ================= */
-let CAL={y:null,m:null};
+let CAL={y:null,m:null,sel:null};
 function viewCalendar(app){
   const now=new Date(),tk=todayKey();
   if(CAL.y==null){CAL.y=now.getFullYear();CAL.m=now.getMonth()}
+  if(CAL.sel==null)CAL.sel=tk;
   const startDow=new Date(CAL.y,CAL.m,1).getDay();
   const daysIn=new Date(CAL.y,CAL.m+1,0).getDate();
   const prevDays=new Date(CAL.y,CAL.m,0).getDate();
@@ -716,16 +780,33 @@ function viewCalendar(app){
     </div>
     <div class="cal-grid" id="calGrid">
       ${WD.map(w=>`<div class="cal-dow">周${w}</div>`).join('')}
-      ${cells.map(c=>`<div class="cal-day ${c.other?'other':''} ${c.today?'today':''} ${c.marked?'marked':''}" data-date="${c.date}"><span>${c.day}</span>${c.marked?`<span class="mk"><i></i></span>`:''}</div>`).join('')}
+      ${cells.map(c=>`<div class="cal-day ${c.other?'other':''} ${c.today?'today':''} ${c.marked?'marked':''} ${c.date===CAL.sel?'selected':''}" data-date="${c.date}"><span>${c.day}</span>${c.marked?`<span class="mk"><i></i></span>`:''}</div>`).join('')}
     </div>
   </div>`;
   const monthLogs=STATE.logs.filter(l=>{const d=parseKey(l.date);return d.getFullYear()===CAL.y&&d.getMonth()===CAL.m});
   const times=monthLogs.reduce((s,l)=>s+l.itemIds.length,0);
   html+=`<div class="card tight" style="margin-top:14px"><div class="row"><div class="grow"><div style="font-weight:700">本月记录 ${monthLogs.length} 天</div><div style="font-size:12px;color:#7b776b">${monthLogs.length?`共穿 ${times} 件次`:'还没有记录'}</div></div><button class="btn sm yellow" onclick="go('/log/${tk}')">记录今日</button></div></div>`;
+  html+=calDetailHTML(CAL.sel);
   app.innerHTML=html;
   $('#calPrev').onclick=()=>{CAL.m--;if(CAL.m<0){CAL.m=11;CAL.y--}render()};
   $('#calNext').onclick=()=>{CAL.m++;if(CAL.m>11){CAL.m=0;CAL.y++}render()};
-  $('#calGrid').addEventListener('click',e=>{const el=e.target.closest('.cal-day');if(el&&!el.classList.contains('other'))go('/log/'+el.dataset.date)});
+  $('#calGrid').addEventListener('click',e=>{const el=e.target.closest('.cal-day');if(el&&!el.classList.contains('other')){CAL.sel=el.dataset.date;render()}});
+}
+function calDetailHTML(selDate){
+  const l=STATE.logs.find(x=>x.date===selDate);
+  const items=l?l.itemIds.map(id=>STATE.items.find(i=>i.id===id)).filter(Boolean):[];
+  let inner=`<div class="row" style="margin-bottom:12px">
+    <div class="grow"><div style="font-weight:700;font-size:15px">${fmtDate(selDate)} ${wdCN(selDate)}</div>
+      <div style="font-size:12px;color:#7b776b;margin-top:2px">${l?items.length+' 件单品':'当天没有记录'}</div></div>
+    <button class="btn sm ${l?'blue':'yellow'}" onclick="go('/log/${selDate}')">${l?'编辑':'记录这一天'}</button>
+  </div>`;
+  if(l){
+    inner+=`<div class="today-items">${items.map(it=>`<div class="mini"><div class="photo" style="background-image:url('${imgUrl(it)}')"></div><div class="t">${esc(it.name||(catById(it.categoryId)||{}).name||'')}</div></div>`).join('')}</div>`;
+    if(l.note)inner+=`<div style="font-size:13px;color:#5c594f;margin-top:12px">备注：${esc(l.note)}</div>`;
+  }else{
+    inner+=`<div style="font-size:13px;color:#7b776b">这一天还没有记录穿搭，点「记录这一天」补上。</div>`;
+  }
+  return `<div class="card" style="margin-top:14px">${inner}</div>`;
 }
 /* ================= 视图：统计 ================= */
 let STAB='cpw';
@@ -749,12 +830,20 @@ function viewStats(app){
       <div style="flex:1;min-width:130px"><div class="stat-big" style="color:var(--mint);font-size:29px">${fmtMoney(totalValue,STATE.currency)}</div><div style="font-size:12px;opacity:.8;margin-top:4px">衣物总价值</div></div>
       <div style="flex:1;min-width:90px"><div class="stat-big" style="color:var(--pink)">${totalWear}</div><div style="font-size:12px;opacity:.8;margin-top:4px">累计穿着</div></div>
     </div></div>`;
-  // 品类分布
-  const cats=STATE.categories.map(c=>{const l=items.filter(i=>i.categoryId===c.id);return{name:c.name,n:l.length,val:l.reduce((s,i)=>s+(Number(i.price)||0),0)}}).filter(x=>x.n>0).sort((a,b)=>b.n-a.n);
+  // 品类分布（默认前四，可展开全部）
+  const cats=STATE.categories.map(c=>{const l=items.filter(i=>i.categoryId===c.id);return{name:c.name,n:l.length,val:l.reduce((s,i)=>s+(Number(i.price)||0),0)}}).filter(x=>x.n>0);
+  const orphan=items.filter(i=>!catById(i.categoryId));
+  if(orphan.length)cats.push({name:'未分类',n:orphan.length,val:orphan.reduce((s,i)=>s+(Number(i.price)||0),0)});
+  cats.sort((a,b)=>b.n-a.n);
   const maxN=Math.max(...cats.map(c=>c.n),1);
+  const barRow=(c,idx)=>`<div style="margin-bottom:11px"><div class="row" style="font-size:13px;margin-bottom:5px"><span style="font-weight:700">${esc(c.name)}</span><span class="grow"></span><span style="color:#7b776b">${c.n} 件 · ${fmtMoney(c.val,STATE.currency)}</span></div>
+    <div style="height:12px;border-radius:6px;box-shadow:var(--soft-inset)"><div style="height:12px;border-radius:6px;width:${Math.round(c.n/maxN*100)}%;background:${BAR[idx%BAR.length]}"></div></div></div>`;
   html+=`<div class="label" style="margin:22px 4px 8px">品类分布</div><div class="card">`;
-  html+=cats.map((c,idx)=>`<div style="margin-bottom:11px"><div class="row" style="font-size:13px;margin-bottom:5px"><span style="font-weight:700">${esc(c.name)}</span><span class="grow"></span><span style="color:#7b776b">${c.n} 件 · ${fmtMoney(c.val,STATE.currency)}</span></div>
-    <div style="height:12px;border-radius:6px;box-shadow:var(--soft-inset)"><div style="height:12px;border-radius:6px;width:${Math.round(c.n/maxN*100)}%;background:${BAR[idx%BAR.length]}"></div></div></div>`).join('');
+  html+=cats.slice(0,4).map((c,k)=>barRow(c,k)).join('');
+  if(cats.length>4){
+    html+=`<div id="distMore" style="display:none">${cats.slice(4).map((c,k)=>barRow(c,k+4)).join('')}</div>`;
+    html+=`<button class="btn-soft block" id="distToggle" style="margin-top:4px">展开全部（还有 ${cats.length-4} 类）</button>`;
+  }
   html+=`</div>`;
   // 闲置
   const idle=items.map(i=>({i,d:idleDays(i,tk)})).filter(x=>x.d>=30).sort((a,b)=>b.d-a.d);
@@ -784,6 +873,12 @@ function viewStats(app){
   html+=`</div>`;
   app.innerHTML=html;
   document.querySelectorAll('[data-stab]').forEach(b=>b.onclick=()=>{STAB=b.dataset.stab;render()});
+  const dt=$('#distToggle');
+  if(dt)dt.onclick=()=>{
+    const m=$('#distMore'),open=m.style.display!=='none';
+    m.style.display=open?'none':'block';
+    dt.textContent=open?`展开全部（还有 ${cats.length-4} 类）`:'收起';
+  };
 }
 /* ================= 视图：设置 ================= */
 function viewSettings(app){
@@ -881,6 +976,8 @@ async function doImport(data,replace){
   await openDB();
   await ensureCategories();
   await syncBuiltinCategories();
+  await loadState();
+  await migrateSubcategories();
   await loadState();
   if(!location.hash)location.hash='#/today';
   render();
