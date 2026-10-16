@@ -884,8 +884,15 @@ async function doImport(data,replace){
   await loadState();
   if(!location.hash)location.hash='#/today';
   render();
-  if('serviceWorker' in navigator)
-    window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+  if('serviceWorker' in navigator){
+    let refreshing=false;
+    if(navigator.serviceWorker.controller){
+      navigator.serviceWorker.addEventListener('controllerchange',()=>{
+        if(!refreshing){refreshing=true;location.reload();}
+      });
+    }
+    window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').then(reg=>reg.update()).catch(()=>{}));
+  }
 })();
 </script>
 </body>
