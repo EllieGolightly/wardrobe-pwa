@@ -403,13 +403,14 @@ async function migrateSubcategories(){
 }
 
 /* ================= 状态 ================= */
-let STATE={items:[],logs:[],categories:[],currency:'CNY'};
+let STATE={items:[],logs:[],categories:[],currency:'CNY',startDate:''};
 async function loadState(){
   STATE.items=await dbAll('items');
   STATE.logs=await dbAll('logs');
   STATE.categories=await dbAll('categories');
   sortCategories();
   STATE.currency=await getSetting('currency','CNY');
+  STATE.startDate=await getSetting('startDate','');
 }
 function sortCategories(){
   const order=Object.fromEntries(DEFAULT_CATEGORIES.map((c,i)=>[c.id,i]));
@@ -420,7 +421,11 @@ function sortCategories(){
   });
 }
 /* ================= 统计计算 ================= */
-function wearCountOf(id){return STATE.logs.reduce((n,l)=>n+(l.itemIds.includes(id)?1:0),0)}
+function wearCountOf(id){
+  const logged=STATE.logs.reduce((n,l)=>n+(l.itemIds.includes(id)?1:0),0);
+  const it=STATE.items.find(x=>x.id===id);
+  return logged+(it&&it.priorWears?Number(it.priorWears):0);
+}
 function lastWornOf(id){let last=null;for(const l of STATE.logs)if(l.itemIds.includes(id)&&(!last||l.date>last))last=l.date;return last}
 function cpwOf(item){
   if(item.price==null||item.price===''||isNaN(item.price))return null;
@@ -429,9 +434,22 @@ function cpwOf(item){
 }
 function fmtCpw(item){const v=cpwOf(item);if(v==null)return '—';return curSym(STATE.currency)+(v>=100?Math.round(v).toLocaleString():v.toFixed(1))}
 function idleDays(item,tk=todayKey()){
-  const last=lastWornOf(item.id)||item.purchaseDate;
+  const last=lastWornOf(item.id);
   if(last)return daysBetween(last,tk);
-  return daysBetween(dateKey(new Date(item.createdAt)),tk);
+  // 无穿着记录：从记账开始日起算（系统只评估它看到的行为），不追溯购买日期
+  const start=STATE.startDate||dateKey(new Date(item.createdAt));
+  return Math.max(0,daysBetween(start,tk));
+}
+function currentSeason(date=new Date()){
+  const m=date.getMonth()+1;
+  if(m>=6&&m<=8)return 'summer';
+  if(m===12||m<=2)return 'winter';
+  return 'spring-autumn';
+}
+function isInSeason(item,date=new Date()){
+  const s=item.seasons||[];
+  if(!s.length)return true; // 没标季节，视为四季通用
+  return s.includes(currentSeason(date));
 }
 const activeItems=()=>STATE.items.filter(i=>i.status!=='archived');
 
@@ -629,7 +647,7 @@ async function viewEdit(app,id){
   if(id){item=await dbGet('items',id);if(!item){go('/wardrobe');return}}
   FORM=item?{...item,seasons:[...(item.seasons||[])],occasions:[...(item.occasions||[])]}
     :{id:null,categoryId:'',name:'',color:'',brand:'',material:'',size:'',price:'',
-      purchaseDate:'',seasons:[],occasions:[],note:'',imageBlob:null,status:'active',createdAt:Date.now()};
+      purchaseDate:'',priorWears:'',seasons:[],occasions:[],note:'',imageBlob:null,status:'active',createdAt:Date.now()};
   let html=header(id?'编辑衣物':'添加衣物',id?'EDIT ITEM':'NEW ITEM',`<button class="btn sm ghost" onclick="go('/wardrobe')">${ICON.back}</button>`);
   html+=`<div style="text-align:center;margin-bottom:4px">
     <div id="photoPreview" class="photo" style="height:228px;border-radius:18px;${FORM.imageBlob?`background-image:url('${URL.createObjectURL(FORM.imageBlob)}')`:"display:flex;align-items:center;justify-content:center;background:var(--paper)"}">${FORM.imageBlob?'':`<span style="color:#9a968a;font-size:13px">还没选择照片</span>`}</div>
@@ -656,6 +674,7 @@ async function viewEdit(app,id){
     <label class="label">材质</label><input class="field" id="fMaterial" value="${esc(FORM.material)}" placeholder="例：羊毛、牛仔、棉麻">
     <div class="row" style="gap:10px"><div style="flex:1;min-width:0"><label class="label">价格（${STATE.currency}）</label><input class="field" id="fPrice" type="number" inputmode="decimal" value="${FORM.price==null?'':FORM.price}" placeholder="0"></div>
       <div style="flex:1;min-width:0"><label class="label">购买日期</label><input class="field" id="fDate" type="date" value="${esc(FORM.purchaseDate)}"></div></div>
+    <label class="label">以前大约穿过几次</label><input class="field" id="fPrior" type="number" inputmode="numeric" min="0" value="${FORM.priorWears==null?'':FORM.priorWears}" placeholder="0；旧衣服可填估算值，让单次成本更准">
     <label class="label">季节</label><div class="segment" id="fSeasons">${SEASONS.map(s=>`<button class="chip ${FORM.seasons.includes(s.id)?'on':''}" data-season="${s.id}">${s.name}</button>`).join('')}</div>
     <label class="label">场合</label><div class="segment" id="fOcc">${OCCASIONS.map(o=>`<button class="chip ${FORM.occasions.includes(o.id)?'on':''}" data-occ="${o.id}">${o.name}</button>`).join('')}</div>
     <label class="label">备注</label><textarea class="field" id="fNote" placeholder="产地、洗涤方式、备注…">${esc(FORM.note)}</textarea>
@@ -690,6 +709,7 @@ function bindEdit(){
       price:$('#fPrice').value===''?null:Number($('#fPrice').value),
       currency:STATE.currency,
       purchaseDate:$('#fDate').value||'',
+      priorWears:$('#fPrior').value===''?0:Number($('#fPrior').value),
       seasons:FORM.seasons,occasions:FORM.occasions,
       note:$('#fNote').value.trim(),
       imageBlob:FORM.imageBlob,
@@ -848,9 +868,9 @@ function viewStats(app){
   }
   html+=`</div>`;
   // 闲置
-  const idle=items.map(i=>({i,d:idleDays(i,tk)})).filter(x=>x.d>=30).sort((a,b)=>b.d-a.d);
+  const idle=items.map(i=>({i,d:idleDays(i,tk)})).filter(x=>x.d>=30&&isInSeason(x.i)).sort((a,b)=>b.d-a.d);
   if(idle.length){
-    html+=`<div class="label" style="margin:22px 4px 8px">闲置提醒</div>`;
+    html+=`<div class="label" style="margin:22px 4px 8px">闲置提醒 <span style="font-size:11px;color:#7b776b;font-weight:400">仅统计当季</span></div>`;
     const g90=idle.filter(x=>x.d>=90),g30=idle.filter(x=>x.d<90);
     if(g90.length)html+=idleGroup('90 天以上',g90,'var(--coral)');
     if(g30.length)html+=idleGroup('30–90 天',g30,'var(--yellow)');
@@ -887,6 +907,10 @@ function viewSettings(app){
   let html=header('设置','SETTINGS');
   html+=`<div class="card">
     <div class="set-row">
+      <div class="grow"><div class="l">记账开始日</div><div class="d">没有穿着记录的衣物从这天起算闲置，不追溯过去</div></div>
+      <input class="field" type="date" id="setStart" value="${STATE.startDate}" style="flex-shrink:0;width:auto">
+    </div>
+    <div class="set-row">
       <div class="grow"><div class="l">货币</div><div class="d">添加衣物和统计时使用的货币</div></div>
       <select class="field cur-select" id="setCur" style="flex-shrink:0">${CURRENCIES.map(c=>`<option value="${c.code}" ${STATE.currency===c.code?'selected':''}>${c.code}</option>`).join('')}</select>
     </div>
@@ -910,6 +934,7 @@ function viewSettings(app){
   </div>
   <div class="about"><div class="logo">WARDROBE</div>个人衣物与穿搭管理 · v0.1</div>`;
   app.innerHTML=html;
+  $('#setStart').onchange=async e=>{STATE.startDate=e.target.value;await setSetting('startDate',STATE.startDate);await loadState();render();toast('已更新记账开始日')};
   $('#setCur').onchange=async e=>{STATE.currency=e.target.value;await setSetting('currency',STATE.currency);await loadState();toast('已切换货币')};
   $('#importFile').onchange=importData;
 }
@@ -979,6 +1004,7 @@ async function doImport(data,replace){
   await ensureCategories();
   await syncBuiltinCategories();
   await loadState();
+  if(!STATE.startDate){STATE.startDate=todayKey();await setSetting('startDate',STATE.startDate)}
   await migrateSubcategories();
   await loadState();
   if(!location.hash)location.hash='#/today';
