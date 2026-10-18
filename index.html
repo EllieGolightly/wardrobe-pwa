@@ -184,7 +184,7 @@ select.field{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xml
 .reco-item .t{font-size:12px;font-weight:700;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .reco-item .slot{font-size:10px;color:#7b776b;margin-top:1px}
 .reco-note{font-size:12px;color:#7b776b;background:var(--paper);border-radius:11px;padding:9px 11px;margin-top:11px;line-height:1.5}
-.reco-bar{display:flex;align-items:center;gap:11px;background:var(--bg);border:var(--border-thin);border-radius:var(--r-soft);box-shadow:var(--soft);padding:12px 14px;margin-bottom:16px;cursor:pointer}
+.reco-bar{display:flex;align-items:center;gap:11px;background:var(--paper);border-radius:var(--r-soft);box-shadow:var(--soft-sm);padding:13px 15px;margin-bottom:16px;cursor:pointer;transition:box-shadow .12s}
 .reco-bar:active{box-shadow:var(--soft-inset)}
 .reco-bar .b{font-weight:700;font-size:14px}
 .reco-bar .s{font-size:12px;color:#7b776b;margin-top:2px}
@@ -703,19 +703,13 @@ function viewToday(app){
   html+=`<div class="today-hero"><div class="big">${d.getMonth()+1}月${d.getDate()}日</div><div class="d">${wdCN(tk)}${log?' · 已记录穿搭':' · 还没记录'}</div></div>`;
   if(log){
     const items=log.itemIds.map(id=>STATE.items.find(i=>i.id===id)).filter(Boolean);
-    html+=`<div class="card"><div class="label" style="margin-top:0">今天穿了 ${items.length} 件</div><div class="today-items">`;
+    html+=`<div class="card" style="margin-bottom:22px"><div class="label" style="margin-top:0">今天穿了 ${items.length} 件</div><div class="today-items">`;
     html+=items.map(it=>`<div class="mini"><div class="photo" style="background-image:url('${imgUrl(it)}')"></div><div class="t">${esc(it.name||(catById(it.categoryId)||{}).name||'')}</div></div>`).join('');
     html+=`</div><div style="display:flex;gap:10px;margin-top:16px"><button class="btn blue block" onclick="go('/log/${tk}')">编辑</button><button class="btn ghost block" onclick="confirmClearLog('${tk}')">撤销</button></div></div>`;
     html+=recoCard();
   }else{
     html+=recoCard();
     html+=`<div class="reco-bar" onclick="go('/log/${tk}')"><div class="grow"><div class="b">或者自己挑一套</div><div class="s">打开衣橱，手动选择今天穿的</div></div><div class="arrow">${ICON.chevron}</div></div>`;
-  }
-  const recent=STATE.logs.filter(l=>l.date<tk).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
-  if(recent.length){
-    html+=`<div class="label" style="margin:22px 4px 8px">最近记录</div><div class="card tight">`;
-    html+=recent.map(l=>`<div class="row" style="padding:9px 0;cursor:pointer" onclick="go('/log/${l.date}')"><div class="grow"><div style="font-weight:700;font-size:14px">${fmtDate(l.date)} <span style="color:#7b776b;font-weight:400">${wdCN(l.date)}</span></div><div style="font-size:12px;color:#7b776b">${l.itemIds.length} 件单品</div></div><div style="color:#7b776b">${ICON.chevron}</div></div>`).join('');
-    html+=`</div>`;
   }
   app.innerHTML=html;
   bindReco(app);
