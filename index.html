@@ -191,6 +191,10 @@ select.field{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xml
 .reco-bar .arrow{color:#9a968a;font-size:18px;flex-shrink:0}
 .reco-badge.sm{width:34px;height:34px;border-radius:10px;box-shadow:var(--hard-sm)}
 .reco-badge.sm svg{width:19px;height:19px}
+.tbar-thumbs{display:flex;align-items:center;gap:4px;flex-shrink:0}
+.tbar-thumb{width:34px;height:34px;border-radius:9px;background:var(--dark) center/cover;border:1.5px solid var(--ink)}
+.tbar-more{width:34px;height:34px;border-radius:9px;background:var(--paper);border:1.5px solid var(--ink);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
+.tbar-done .arrow{color:#35D693}
 
 /* ============ 详情 ============ */
 .detail-photo{height:300px;border-radius:var(--r-hard);margin-bottom:16px}
@@ -646,10 +650,24 @@ function recoBarHTML(){
     <div class="arrow">${ICON.chevron}</div>
   </div>`;
 }
+function tomorrowDoneBar(){
+  const tgt=recoTargetDate();
+  const tgtLog=STATE.logs.find(l=>l.date===tgt);
+  const items=tgtLog.itemIds.map(id=>STATE.items.find(i=>i.id===id)).filter(Boolean);
+  const shown=items.slice(0,3);
+  let thumbs=shown.map(it=>`<div class="tbar-thumb" style="background-image:url('${imgUrl(it)}')"></div>`).join('');
+  if(items.length>3)thumbs+=`<div class="tbar-more">+${items.length-3}</div>`;
+  return `<div class="reco-bar tbar-done" id="recoBar">
+    <div class="tbar-thumbs">${thumbs}</div>
+    <div class="grow"><div class="b">明天已配好</div><div class="s">${items.length} 件 · 点击查看或更换</div></div>
+    <div class="arrow">${ICON.chevron}</div>
+  </div>`;
+}
 function recoCard(){
   const log=STATE.logs.find(l=>l.date===todayKey());
-  if(log&&!RECO.expanded&&!RECO.outfit)return recoBarHTML();
   const tgt=recoTargetDate(),forToday=tgt===todayKey();
+  const tgtLog=STATE.logs.find(l=>l.date===tgt);
+  if(log&&!RECO.expanded&&!RECO.outfit)return tgtLog?tomorrowDoneBar():recoBarHTML();
   let h='<div class="card" style="margin-bottom:16px">';
   if(log)h+='<div style="display:flex;justify-content:flex-end;margin-bottom:2px"><button class="chip" id="recoCollapse" style="font-size:12px;padding:4px 12px">收起</button></div>';
   if(RECO.error==='none'){
@@ -657,6 +675,15 @@ function recoCard(){
     h+='<div class="reco-note">衣橱里当季的衣物还差一点，凑不齐“上身+下装”或一件连体。先去添几件，或到衣橱里翻翻。</div>';
     h+='<button class="btn coral block" style="margin-top:12px" onclick="go(\'/edit\')">去添加衣物</button>';
     h+='<button class="btn ghost sm block" style="margin-top:8px" onclick="go(\'/wardrobe\')">去衣橱看看</button>';
+  }else if(!RECO.outfit&&tgtLog&&!forToday){
+    const tgtItems=tgtLog.itemIds.map(id=>STATE.items.find(i=>i.id===id)).filter(Boolean);
+    h+='<div class="reco-title">明天就穿这套</div><div class="reco-sub">为 '+fmtShort(tgt)+' 准备 · '+tgtItems.length+' 件，都安排好啦</div>';
+    h+='<div class="reco-grid">'+tgtItems.map(it=>{
+      const nm=esc(it.name||(catById(it.categoryId)||{}).name||'');
+      const slot=(catById(it.categoryId)||{}).name||'';
+      return `<div class="reco-item"><div class="photo" style="background-image:url('${imgUrl(it)}')"></div><div class="t">${nm}</div><div class="slot">${slot}</div></div>`;
+    }).join('')+'</div>';
+    h+='<div style="display:flex;gap:10px;margin-top:14px"><button class="btn ghost" id="recoAgain" style="flex:1">换一套</button><button class="btn blue" id="recoEdit" style="flex:2">编辑明天</button></div>';
   }else if(!RECO.outfit){
     const title=forToday?'不知道穿什么？':'给明天挑一套？';
     const sub=forToday?'按现在的季节，从你的衣橱里随机搭一套':'为 '+fmtShort(tgt)+' 搭配，按现在的季节从衣橱里挑';
@@ -694,6 +721,7 @@ function bindReco(app){
   const again=app.querySelector('#recoAgain');if(again)again.addEventListener('click',()=>{doRecommend();render()});
   const acc=app.querySelector('#recoAccept');if(acc)acc.addEventListener('click',acceptOutfit);
   const tw=app.querySelector('#recoTweak');if(tw)tw.addEventListener('click',tweakOutfit);
+  const editBtn=app.querySelector('#recoEdit');if(editBtn)editBtn.addEventListener('click',()=>{go('/log/'+recoTargetDate())});
 }
 /* ================= 视图：今日 ================= */
 function viewToday(app){
