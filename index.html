@@ -172,6 +172,18 @@ select.field{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xml
 .mini{width:74px;text-align:center}
 .mini .photo{width:74px;height:74px;border-radius:12px}
 .mini .t{font-size:11px;margin-top:5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 随机推荐 */
+.reco-head{display:flex;align-items:center;gap:11px;margin-bottom:2px}
+.reco-badge{width:40px;height:40px;flex-shrink:0;border:var(--border);border-radius:12px;background:var(--mint);box-shadow:var(--hard-sm);display:flex;align-items:center;justify-content:center}
+.reco-badge svg{width:22px;height:22px}
+.reco-title{font-family:var(--font-display);font-size:17px;line-height:1.2}
+.reco-sub{color:#6b675c;font-size:12px;margin-top:2px}
+.reco-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}
+.reco-item{text-align:center}
+.reco-item .photo{height:104px;border-radius:13px}
+.reco-item .t{font-size:12px;font-weight:700;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.reco-item .slot{font-size:10px;color:#7b776b;margin-top:1px}
+.reco-note{font-size:12px;color:#7b776b;background:var(--paper);border-radius:11px;padding:9px 11px;margin-top:11px;line-height:1.5}
 
 /* ============ 详情 ============ */
 .detail-photo{height:300px;border-radius:var(--r-hard);margin-bottom:16px}
@@ -474,7 +486,8 @@ function header(zh,en,action){
 const ICON={
   plus:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`,
   chevron:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>`,
-  back:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>`
+  back:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>`,
+  dice:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><rect x="3.5" y="3.5" width="17" height="17" rx="4"/><circle cx="8.5" cy="8.5" r="1.4" fill="currentColor" stroke="none"/><circle cx="15.5" cy="8.5" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="8.5" cy="15.5" r="1.4" fill="currentColor" stroke="none"/><circle cx="15.5" cy="15.5" r="1.4" fill="currentColor" stroke="none"/></svg>`
 };
 
 /* ================= 路由 ================= */
@@ -503,12 +516,160 @@ async function render(){
 }
 window.addEventListener('hashchange',render);
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>go('/'+t.dataset.route)));
+/* ================= 随机推荐 ================= */
+let RECO={prefs:[],outfit:null,error:null,keys:[]};
+let PRE_PICK_IDS=null;
+const RECO_TOP=['short-sleeve','long-sleeve','sweater'];
+const RECO_BOTTOM=['pants','skirt'];
+function recoPool(){return activeItems().filter(it=>isInSeason(it))}
+function recoByCat(pool,id){return pool.filter(it=>it.categoryId===id)}
+function gatherCats(pool,ids){return ids.flatMap(id=>recoByCat(pool,id))}
+// 风格加权：命中偏好×4，没标场合×1，标了别的场合×0.5
+function weightOf(it,prefs){
+  if(!prefs.length)return 1;
+  const occ=it.occasions||[];
+  if(prefs.some(p=>occ.includes(p)))return 4;
+  if(!occ.length)return 1;
+  return 0.5;
+}
+function pickWeighted(list,prefs){
+  if(!list.length)return null;
+  const ws=list.map(it=>weightOf(it,prefs));
+  const total=ws.reduce((a,b)=>a+b,0);
+  let r=Math.random()*total;
+  for(let i=0;i<list.length;i++){r-=ws[i];if(r<=0)return list[i]}
+  return list[list.length-1];
+}
+function buildOutfit(){
+  const pool=recoPool();
+  const tops=gatherCats(pool,RECO_TOP),bottoms=gatherCats(pool,RECO_BOTTOM),dresses=recoByCat(pool,'dress');
+  const canDress=dresses.length>0,canSplit=tops.length>0&&bottoms.length>0;
+  if(!canDress&&!canSplit)return {error:'none'};
+  const route=(canDress&&canSplit)?(Math.random()<0.5?'dress':'split'):(canDress?'dress':'split');
+  const slots=[],notes=[];
+  if(route==='dress')slots.push({label:'连体',it:pickWeighted(dresses,RECO.prefs)});
+  else{
+    slots.push({label:'上衣',it:pickWeighted(tops,RECO.prefs)});
+    slots.push({label:'下装',it:pickWeighted(bottoms,RECO.prefs)});
+  }
+  // 外套按季节概率
+  const s=currentSeason();
+  const outerProb=s==='winter'?0.78:(s==='spring-autumn'?0.42:0.12);
+  const outers=recoByCat(pool,'outer');
+  if(outers.length&&Math.random()<outerProb)slots.push({label:'外套',it:pickWeighted(outers,RECO.prefs)});
+  // 鞋（搭配通常必备）
+  const shoes=recoByCat(pool,'shoes');
+  if(shoes.length)slots.push({label:'鞋',it:pickWeighted(shoes,RECO.prefs)});
+  else notes.push('没有当季的鞋，记得自己配一双。');
+  // 点缀
+  const has=p=>RECO.prefs.includes(p);
+  const bag=recoByCat(pool,'bag'),hat=recoByCat(pool,'hat'),acc=recoByCat(pool,'accessory');
+  const bagProb=has('commute')||has('formal')?0.72:(has('sport')?0.2:0.32);
+  const hatProb=has('sport')?0.45:(has('casual')?0.3:0.15);
+  const accProb=has('casual')?0.3:0.22;
+  if(bag.length&&Math.random()<bagProb)slots.push({label:'包',it:pickWeighted(bag,RECO.prefs)});
+  if(hat.length&&Math.random()<hatProb)slots.push({label:'帽子',it:pickWeighted(hat,RECO.prefs)});
+  if(acc.length&&Math.random()<accProb)slots.push({label:'配饰',it:pickWeighted(acc,RECO.prefs)});
+  // 风格完全无命中时如实提示
+  if(RECO.prefs.length){
+    const matched=slots.some(sl=>(sl.it.occasions||[]).some(o=>RECO.prefs.includes(o)));
+    if(!matched)notes.push('没有标注「'+RECO.prefs.map(p=>cName(p,OCCASIONS)).join('、')+'」的当季衣物，先按季节搭了一套。');
+  }
+  const items=slots.filter(x=>x.it).map(x=>x.it);
+  return {route,slots:slots.filter(x=>x.it),notes,items};
+}
+function outfitKey(o){return o.items.map(i=>i.id).sort().join('|')}
+function doRecommend(){
+  RECO.error=null;
+  let out=null;
+  for(let i=0;i<9;i++){
+    const o=buildOutfit();
+    if(o.error){RECO.error='none';RECO.outfit=null;return}
+    if(!RECO.keys.includes(outfitKey(o))){out=o;break}
+    out=o;
+  }
+  RECO.outfit=out;
+  RECO.keys.unshift(outfitKey(out));
+  RECO.keys=RECO.keys.slice(0,6);
+}
+function toggleRecoPref(id){
+  if(!id)RECO.prefs=[];
+  else{
+    if(RECO.prefs.includes(id))RECO.prefs=RECO.prefs.filter(x=>x!==id);
+    else RECO.prefs.push(id);
+  }
+  RECO.outfit=null;RECO.error=null;
+  render();
+}
+async function acceptOutfit(){
+  if(!RECO.outfit)return;
+  const tk=todayKey();
+  const existing=STATE.logs.find(l=>l.date===tk);
+  const save=async()=>{
+    const rec={id:existing?existing.id:uuid(),date:tk,itemIds:RECO.outfit.items.map(i=>i.id),note:existing?existing.note||'':'',createdAt:existing?existing.createdAt:Date.now(),updatedAt:Date.now()};
+    await dbPut('logs',rec);
+    RECO.outfit=null;
+    await loadState();toast('已记录今日穿搭');render();
+  };
+  if(existing){
+    openSheet(`<h3>替换今天的穿搭？</h3><p style="color:#6b675c;font-size:13px;margin:8px 0 18px">今天已经记录过啦，要用这套替换吗？</p>
+      <div style="display:flex;gap:10px"><button class="btn ghost" style="flex:1" onclick="closeSheet()">取消</button><button class="btn blue" style="flex:1" id="okRep">替换</button></div>`,true);
+    $('#okRep').onclick=async()=>{closeSheet();await save()};
+  }else await save();
+}
+function tweakOutfit(){
+  if(!RECO.outfit)return;
+  PRE_PICK_IDS=RECO.outfit.items.map(i=>i.id);
+  go('/log/'+todayKey());
+}
+function recoCard(){
+  let h='<div class="card" style="margin-bottom:16px">';
+  if(RECO.error==='none'){
+    h+='<div class="reco-title">当季还凑不出一套</div>';
+    h+='<div class="reco-note">衣橱里当季的衣物还差一点，凑不齐“上身+下装”或一件连体。先去添几件，或到衣橱里翻翻。</div>';
+    h+='<button class="btn coral block" style="margin-top:12px" onclick="go(\'/edit\')">去添加衣物</button>';
+    h+='<button class="btn ghost sm block" style="margin-top:8px" onclick="go(\'/wardrobe\')">去衣橱看看</button>';
+  }else if(!RECO.outfit){
+    h+='<div class="reco-head"><div class="reco-badge">'+ICON.dice+'</div><div><div class="reco-title">不知道穿什么？</div><div class="reco-sub">按现在的季节，从你的衣橱里随机搭一套</div></div></div>';
+    h+='<div class="label" style="margin:13px 0 7px">今天想走什么风格？（可不选）</div>';
+    h+='<div class="segment" id="recoPref" style="padding-bottom:10px">';
+    h+='<button class="chip '+(RECO.prefs.length===0?'on':'')+'" data-pref="">不限</button>';
+    h+=OCCASIONS.filter(o=>o.id!=='other').map(o=>`<button class="chip ${RECO.prefs.includes(o.id)?'on':''}" data-pref="${o.id}">${o.name}</button>`).join('');
+    h+='</div>';
+    h+='<button class="btn coral block" id="recoGo">随机搭一套</button>';
+  }else{
+    const o=RECO.outfit;
+    const prefTxt=RECO.prefs.length?RECO.prefs.map(p=>cName(p,OCCASIONS)).join('、')+'偏好':'不限风格';
+    h+='<div class="reco-title">这套怎么样？</div><div class="reco-sub">'+cName(currentSeason(),SEASONS)+'当季 · '+prefTxt+'</div>';
+    h+='<div class="reco-grid">';
+    h+=o.slots.map(sl=>{
+      const it=sl.it;
+      const nm=esc(it.name||(catById(it.categoryId)||{}).name||'');
+      return `<div class="reco-item"><div class="photo" style="background-image:url('${imgUrl(it)}')"></div><div class="t">${nm}</div><div class="slot">${sl.label}</div></div>`;
+    }).join('');
+    h+='</div>';
+    if(o.notes.length)h+=o.notes.map(n=>`<div class="reco-note">${esc(n)}</div>`).join('');
+    h+='<div style="display:flex;gap:10px;margin-top:14px"><button class="btn ghost" id="recoAgain" style="flex:1">换一套</button><button class="btn blue" id="recoAccept" style="flex:2">就穿这套</button></div>';
+    h+='<button class="btn ghost sm block" id="recoTweak" style="margin-top:8px;border:none;box-shadow:none">想手动改？再微调一下</button>';
+  }
+  h+='</div>';
+  return h;
+}
+function bindReco(app){
+  const pref=app.querySelector('#recoPref');
+  if(pref)pref.addEventListener('click',e=>{const b=e.target.closest('[data-pref]');if(b)toggleRecoPref(b.dataset.pref)});
+  const goBtn=app.querySelector('#recoGo');if(goBtn)goBtn.addEventListener('click',()=>{doRecommend();render()});
+  const again=app.querySelector('#recoAgain');if(again)again.addEventListener('click',()=>{doRecommend();render()});
+  const acc=app.querySelector('#recoAccept');if(acc)acc.addEventListener('click',acceptOutfit);
+  const tw=app.querySelector('#recoTweak');if(tw)tw.addEventListener('click',tweakOutfit);
+}
 /* ================= 视图：今日 ================= */
 function viewToday(app){
   const tk=todayKey(),d=new Date();
   const log=STATE.logs.find(l=>l.date===tk);
   let html=header('今日','TODAY');
   html+=`<div class="today-hero"><div class="big">${d.getMonth()+1}月${d.getDate()}日</div><div class="d">${wdCN(tk)}${log?' · 已记录穿搭':' · 还没记录'}</div></div>`;
+  html+=recoCard();
   if(log){
     const items=log.itemIds.map(id=>STATE.items.find(i=>i.id===id)).filter(Boolean);
     html+=`<div class="card"><div class="label" style="margin-top:0">今天穿了 ${items.length} 件</div><div class="today-items">`;
@@ -524,6 +685,7 @@ function viewToday(app){
     html+=`</div>`;
   }
   app.innerHTML=html;
+  bindReco(app);
 }
 function confirmClearLog(date){
   openSheet(`<h3>撤销这天的记录？</h3><p style="color:#6b675c;font-size:13px;margin:8px 0 18px">${fmtDate(date)} 的穿搭记录会被删除，物品本身不受影响。</p>
@@ -540,7 +702,9 @@ let PICK={date:null,selected:new Set(),note:''};
 function viewLog(app,date){
   const d=date||todayKey();
   const existing=STATE.logs.find(l=>l.date===d);
-  PICK={date:d,selected:new Set(existing?existing.itemIds:[]),note:existing?existing.note||'':'',filter:{cat:'',season:''}};
+  const baseIds=PRE_PICK_IDS||(existing?existing.itemIds:[]);
+  if(PRE_PICK_IDS)PRE_PICK_IDS=null;
+  PICK={date:d,selected:new Set(baseIds),note:existing?existing.note||'':'',filter:{cat:'',season:''}};
   const items=activeItems();
   const back=d===todayKey()?'/today':'/calendar';
   let html=header(fmtDate(d),wdCN(d)+' · 记录穿搭',`<button class="btn sm ghost" onclick="go('${back}')">${ICON.back}</button>`);
