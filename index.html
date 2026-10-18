@@ -184,6 +184,13 @@ select.field{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xml
 .reco-item .t{font-size:12px;font-weight:700;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .reco-item .slot{font-size:10px;color:#7b776b;margin-top:1px}
 .reco-note{font-size:12px;color:#7b776b;background:var(--paper);border-radius:11px;padding:9px 11px;margin-top:11px;line-height:1.5}
+.reco-bar{display:flex;align-items:center;gap:11px;background:var(--bg);border:var(--border-thin);border-radius:var(--r-soft);box-shadow:var(--soft);padding:12px 14px;margin-bottom:16px;cursor:pointer}
+.reco-bar:active{box-shadow:var(--soft-inset)}
+.reco-bar .b{font-weight:700;font-size:14px}
+.reco-bar .s{font-size:12px;color:#7b776b;margin-top:2px}
+.reco-bar .arrow{color:#9a968a;font-size:18px;flex-shrink:0}
+.reco-badge.sm{width:34px;height:34px;border-radius:10px;box-shadow:var(--hard-sm)}
+.reco-badge.sm svg{width:19px;height:19px}
 
 /* ============ 详情 ============ */
 .detail-photo{height:300px;border-radius:var(--r-hard);margin-bottom:16px}
@@ -517,7 +524,7 @@ async function render(){
 window.addEventListener('hashchange',render);
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>go('/'+t.dataset.route)));
 /* ================= 随机推荐 ================= */
-let RECO={prefs:[],outfit:null,error:null,keys:[]};
+let RECO={prefs:[],outfit:null,error:null,keys:[],expanded:false};
 let PRE_PICK_IDS=null;
 const RECO_TOP=['short-sleeve','long-sleeve','sweater'];
 const RECO_BOTTOM=['pants','skirt'];
@@ -601,6 +608,8 @@ function toggleRecoPref(id){
   RECO.outfit=null;RECO.error=null;
   render();
 }
+function expandReco(){RECO.expanded=true;render()}
+function collapseReco(){RECO.expanded=false;RECO.outfit=null;RECO.error=null;render()}
 async function acceptOutfit(){
   if(!RECO.outfit)return;
   const tk=todayKey();
@@ -608,7 +617,7 @@ async function acceptOutfit(){
   const save=async()=>{
     const rec={id:existing?existing.id:uuid(),date:tk,itemIds:RECO.outfit.items.map(i=>i.id),note:existing?existing.note||'':'',createdAt:existing?existing.createdAt:Date.now(),updatedAt:Date.now()};
     await dbPut('logs',rec);
-    RECO.outfit=null;
+    RECO.outfit=null;RECO.expanded=false;
     await loadState();toast('已记录今日穿搭');render();
   };
   if(existing){
@@ -622,8 +631,18 @@ function tweakOutfit(){
   PRE_PICK_IDS=RECO.outfit.items.map(i=>i.id);
   go('/log/'+todayKey());
 }
+function recoBarHTML(){
+  return `<div class="reco-bar" id="recoBar">
+    <div class="reco-badge sm">${ICON.dice}</div>
+    <div class="grow"><div class="b">不知道明天穿什么？</div><div class="s">随机搭一套，看看新点子</div></div>
+    <div class="arrow">${ICON.chevron}</div>
+  </div>`;
+}
 function recoCard(){
+  const log=STATE.logs.find(l=>l.date===todayKey());
+  if(log&&!RECO.expanded&&!RECO.outfit)return recoBarHTML();
   let h='<div class="card" style="margin-bottom:16px">';
+  if(log)h+='<div style="display:flex;justify-content:flex-end;margin-bottom:2px"><button class="chip" id="recoCollapse" style="font-size:12px;padding:4px 12px">收起</button></div>';
   if(RECO.error==='none'){
     h+='<div class="reco-title">当季还凑不出一套</div>';
     h+='<div class="reco-note">衣橱里当季的衣物还差一点，凑不齐“上身+下装”或一件连体。先去添几件，或到衣橱里翻翻。</div>';
@@ -656,6 +675,8 @@ function recoCard(){
   return h;
 }
 function bindReco(app){
+  const bar=app.querySelector('#recoBar');if(bar)bar.addEventListener('click',expandReco);
+  const col=app.querySelector('#recoCollapse');if(col)col.addEventListener('click',collapseReco);
   const pref=app.querySelector('#recoPref');
   if(pref)pref.addEventListener('click',e=>{const b=e.target.closest('[data-pref]');if(b)toggleRecoPref(b.dataset.pref)});
   const goBtn=app.querySelector('#recoGo');if(goBtn)goBtn.addEventListener('click',()=>{doRecommend();render()});
@@ -669,14 +690,15 @@ function viewToday(app){
   const log=STATE.logs.find(l=>l.date===tk);
   let html=header('今日','TODAY');
   html+=`<div class="today-hero"><div class="big">${d.getMonth()+1}月${d.getDate()}日</div><div class="d">${wdCN(tk)}${log?' · 已记录穿搭':' · 还没记录'}</div></div>`;
-  html+=recoCard();
   if(log){
     const items=log.itemIds.map(id=>STATE.items.find(i=>i.id===id)).filter(Boolean);
     html+=`<div class="card"><div class="label" style="margin-top:0">今天穿了 ${items.length} 件</div><div class="today-items">`;
     html+=items.map(it=>`<div class="mini"><div class="photo" style="background-image:url('${imgUrl(it)}')"></div><div class="t">${esc(it.name||(catById(it.categoryId)||{}).name||'')}</div></div>`).join('');
     html+=`</div><div style="display:flex;gap:10px;margin-top:16px"><button class="btn blue block" onclick="go('/log/${tk}')">编辑</button><button class="btn ghost block" onclick="confirmClearLog('${tk}')">撤销</button></div></div>`;
+    html+=recoCard();
   }else{
-    html+=`<div class="card" style="padding:32px 20px;text-align:center"><h3 style="font-family:var(--font-display);font-size:18px;margin-bottom:8px">今天穿了什么？</h3><p style="color:#6b675c;font-size:13px;margin:0 0 18px">记录一次穿搭，几秒钟，顺便看看每件衣服的单次成本。</p><button class="btn yellow block" onclick="go('/log/${tk}')">记录今日穿搭</button></div>`;
+    html+=recoCard();
+    html+=`<div class="reco-bar" onclick="go('/log/${tk}')"><div class="grow"><div class="b">或者自己挑一套</div><div class="s">打开衣橱，手动选择今天穿的</div></div><div class="arrow">${ICON.chevron}</div></div>`;
   }
   const recent=STATE.logs.filter(l=>l.date<tk).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
   if(recent.length){
