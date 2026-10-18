@@ -525,6 +525,12 @@ window.addEventListener('hashchange',render);
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>go('/'+t.dataset.route)));
 /* ================= 随机推荐 ================= */
 let RECO={prefs:[],outfit:null,error:null,keys:[],expanded:false};
+const fmtShort=k=>{const d=parseKey(k);return `${d.getMonth()+1}月${d.getDate()}日 ${wdCN(k)}`};
+// 推荐目标日期：今天没记就为今天，记了就为明天
+function recoTargetDate(){
+  const tk=todayKey();
+  return STATE.logs.some(l=>l.date===tk)?dateKey(addDays(new Date(),1)):tk;
+}
 let PRE_PICK_IDS=null;
 const RECO_TOP=['short-sleeve','long-sleeve','sweater'];
 const RECO_BOTTOM=['pants','skirt'];
@@ -612,16 +618,17 @@ function expandReco(){RECO.expanded=true;render()}
 function collapseReco(){RECO.expanded=false;RECO.outfit=null;RECO.error=null;render()}
 async function acceptOutfit(){
   if(!RECO.outfit)return;
-  const tk=todayKey();
-  const existing=STATE.logs.find(l=>l.date===tk);
+  const tgt=recoTargetDate(),isToday=tgt===todayKey();
+  const existing=STATE.logs.find(l=>l.date===tgt);
   const save=async()=>{
-    const rec={id:existing?existing.id:uuid(),date:tk,itemIds:RECO.outfit.items.map(i=>i.id),note:existing?existing.note||'':'',createdAt:existing?existing.createdAt:Date.now(),updatedAt:Date.now()};
+    const rec={id:existing?existing.id:uuid(),date:tgt,itemIds:RECO.outfit.items.map(i=>i.id),note:existing?existing.note||'':'',createdAt:existing?existing.createdAt:Date.now(),updatedAt:Date.now()};
     await dbPut('logs',rec);
     RECO.outfit=null;RECO.expanded=false;
-    await loadState();toast('已记录今日穿搭');render();
+    await loadState();toast(isToday?'已记录今日穿搭':'已记好明天的穿搭');render();
   };
   if(existing){
-    openSheet(`<h3>替换今天的穿搭？</h3><p style="color:#6b675c;font-size:13px;margin:8px 0 18px">今天已经记录过啦，要用这套替换吗？</p>
+    const dayTxt=isToday?'今天':fmtShort(tgt);
+    openSheet(`<h3>替换${isToday?'今天':'明天'}的穿搭？</h3><p style="color:#6b675c;font-size:13px;margin:8px 0 18px">${dayTxt}已经记录过啦，要用这套替换吗？</p>
       <div style="display:flex;gap:10px"><button class="btn ghost" style="flex:1" onclick="closeSheet()">取消</button><button class="btn blue" style="flex:1" id="okRep">替换</button></div>`,true);
     $('#okRep').onclick=async()=>{closeSheet();await save()};
   }else await save();
@@ -629,18 +636,20 @@ async function acceptOutfit(){
 function tweakOutfit(){
   if(!RECO.outfit)return;
   PRE_PICK_IDS=RECO.outfit.items.map(i=>i.id);
-  go('/log/'+todayKey());
+  go('/log/'+recoTargetDate());
 }
 function recoBarHTML(){
+  const tgt=recoTargetDate();
   return `<div class="reco-bar" id="recoBar">
     <div class="reco-badge sm">${ICON.dice}</div>
-    <div class="grow"><div class="b">不知道明天穿什么？</div><div class="s">随机搭一套，看看新点子</div></div>
+    <div class="grow"><div class="b">给明天挑一套？</div><div class="s">为 ${fmtShort(tgt)} 提前想好，明早不纠结</div></div>
     <div class="arrow">${ICON.chevron}</div>
   </div>`;
 }
 function recoCard(){
   const log=STATE.logs.find(l=>l.date===todayKey());
   if(log&&!RECO.expanded&&!RECO.outfit)return recoBarHTML();
+  const tgt=recoTargetDate(),forToday=tgt===todayKey();
   let h='<div class="card" style="margin-bottom:16px">';
   if(log)h+='<div style="display:flex;justify-content:flex-end;margin-bottom:2px"><button class="chip" id="recoCollapse" style="font-size:12px;padding:4px 12px">收起</button></div>';
   if(RECO.error==='none'){
@@ -649,8 +658,10 @@ function recoCard(){
     h+='<button class="btn coral block" style="margin-top:12px" onclick="go(\'/edit\')">去添加衣物</button>';
     h+='<button class="btn ghost sm block" style="margin-top:8px" onclick="go(\'/wardrobe\')">去衣橱看看</button>';
   }else if(!RECO.outfit){
-    h+='<div class="reco-head"><div class="reco-badge">'+ICON.dice+'</div><div><div class="reco-title">不知道穿什么？</div><div class="reco-sub">按现在的季节，从你的衣橱里随机搭一套</div></div></div>';
-    h+='<div class="label" style="margin:13px 0 7px">今天想走什么风格？（可不选）</div>';
+    const title=forToday?'不知道穿什么？':'给明天挑一套？';
+    const sub=forToday?'按现在的季节，从你的衣橱里随机搭一套':'为 '+fmtShort(tgt)+' 搭配，按现在的季节从衣橱里挑';
+    h+='<div class="reco-head"><div class="reco-badge">'+ICON.dice+'</div><div><div class="reco-title">'+title+'</div><div class="reco-sub">'+sub+'</div></div></div>';
+    h+='<div class="label" style="margin:13px 0 7px">想走什么风格？（可不选）</div>';
     h+='<div class="segment" id="recoPref" style="padding-bottom:10px">';
     h+='<button class="chip '+(RECO.prefs.length===0?'on':'')+'" data-pref="">不限</button>';
     h+=OCCASIONS.filter(o=>o.id!=='other').map(o=>`<button class="chip ${RECO.prefs.includes(o.id)?'on':''}" data-pref="${o.id}">${o.name}</button>`).join('');
@@ -659,7 +670,7 @@ function recoCard(){
   }else{
     const o=RECO.outfit;
     const prefTxt=RECO.prefs.length?RECO.prefs.map(p=>cName(p,OCCASIONS)).join('、')+'偏好':'不限风格';
-    h+='<div class="reco-title">这套怎么样？</div><div class="reco-sub">'+cName(currentSeason(),SEASONS)+'当季 · '+prefTxt+'</div>';
+    h+='<div class="reco-title">这套怎么样？</div><div class="reco-sub">为 '+fmtShort(tgt)+' 准备 · '+cName(currentSeason(),SEASONS)+'当季 · '+prefTxt+'</div>';
     h+='<div class="reco-grid">';
     h+=o.slots.map(sl=>{
       const it=sl.it;
