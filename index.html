@@ -1168,17 +1168,22 @@ function calDetailHTML(selDate){
 let STAB='cpw';
 const BAR=['var(--blue)','var(--coral)','var(--mint)','var(--yellow)','var(--pink)','var(--violet)'];
 
-/* ================= 平均成本 ================= */
+/* ================= 平均单次成本 ================= */
 const fmtAvg=v=>curSym(STATE.currency)+(v>=100?Math.round(v).toLocaleString():v.toFixed(1));
+// 口径：每件衣物「单次成本（CPW）」的平均；没填价格的衣物不计入
+const AVG_METRIC='cpw';
 function avgCostInfo(items){
-  const priced=items.filter(i=>i.price!=null&&i.price!==''&&!isNaN(i.price));
-  if(!priced.length)return null;
-  const total=priced.reduce((s,i)=>s+Number(i.price),0);
-  return {value:total/priced.length,n:priced.length};
+  const cpws=items.map(i=>cpwOf(i)).filter(v=>v!=null);
+  if(!cpws.length)return null;
+  const total=cpws.reduce((s,v)=>s+v,0);
+  return {value:total/cpws.length,n:cpws.length};
 }
-// 记录平均成本快照：数值或有价件数变化才新增，自动覆盖所有增删改路径
+// 记录平均单次成本快照：数值或计入件数变化才新增，自动覆盖所有增删改路径
 async function syncAvgSnapshot(info){
   let hist=(await getSetting('avgCostHistory',[]))||[];
+  // 口径切换（如旧版按购买价平均）时清空旧快照，避免把换算法误显示成一次涨跌
+  const metric=await getSetting('avgMetric','');
+  if(metric!==AVG_METRIC){hist=[];await setSetting('avgMetric',AVG_METRIC)}
   const rounded=Math.round(info.value*100)/100;
   const last=hist[hist.length-1];
   if(!last||Math.abs(last.value-rounded)>0.005||last.n!==info.n){
@@ -1235,7 +1240,7 @@ async function viewStats(app){
     <div class="sh-cell"><div class="stat-big money" style="color:var(--mint)">${fmtMoney(totalValue,STATE.currency)}</div><div class="sh-label">衣物总价值</div></div>
     <div class="sh-cell"><div class="stat-big money" style="color:var(--sky)">${info?fmtAvg(info.value):'—'}</div>
       ${sparklineSVG(hist)}${avgDeltaHTML(hist,info?info.value:null)}
-      <div class="sh-label">平均成本${info?` · ${info.n} 件有价`:''}</div></div>
+      <div class="sh-label">平均单次成本${info?` · ${info.n} 件有价`:''}</div></div>
   </div>`;
   // 品类分布（默认前四，可展开全部）
   const cats=STATE.categories.map(c=>{const l=items.filter(i=>i.categoryId===c.id);return{name:c.name,n:l.length,val:l.reduce((s,i)=>s+(Number(i.price)||0),0)}}).filter(x=>x.n>0);
